@@ -23,13 +23,12 @@ import random
 import subprocess
 import requests
 import os
-import traceback
 import sys
 
-def set_debug(debug_level=logging.INFO, filename="",filter=lambda record:True):
+def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:True):
     console = logging.StreamHandler()
     console_filter = logging.Filter()
-    console_filter.filter = filter
+    console_filter.filter = debug_filter
     console.addFilter(console_filter)
     if filename:
         logging.basicConfig(level=debug_level,
@@ -61,20 +60,19 @@ class PPNode(object):
     '''
     def __init__(self, **kwargs):
         self.node_id = 0
-        self.email = ""
-        self.phone = ""
+        self.net_id = 0
+        self.net_secret = ""
 
-        self.ip = ""
-        self.port = 0
+        self.local_addr = ("0.0.0.0",0)
+        self.external_addr = ("0.0.0.0",0)
         self.nat_type = NAT_TYPE['Unknown']
-
-
 
         self.will_to_turn = True
         self.secret = ""
+        
         self.last_in = int(time.time())
         self.last_out = int(time.time()) - 200
-        self.status = False  # unknown,True = alive
+        self.status = False  #  True = alive
         self.turn_server = ""  # 针对非turn节点，其转接点        return self
         self.distance = 10
         self.last_beat_addr = (0,0)
@@ -87,23 +85,22 @@ class PPNode(object):
         self.packet_out = 0
         self.byte_turn = 0
         self.packet_turn = 0
-        self.beat_version = 2
-
+        
         self.delay = 1000
 
         # 必须得到确认包的 sequence 序列。
         # 应用中的序列保证 通过应用自身进行 ，建议用sequence 链接
         self.tx_sequence = 0
+        self.rx_queue = [0,]*20
+
         self.last_ack = 0
         self.tx_window = 5
         self.tx_buffer = {}
         self.tx_retry = 0
 #        self.tx_queue = []   #list of tx_id
         self.tx_queue = {}  # dict of (tx_id:retrycount)
-
         self.rx_sequence = 0
 
-        self.rx_queue = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
         if "node_dict" in kwargs:
             self.load_dict(kwargs["node_dict"])
@@ -117,15 +114,23 @@ class PPNode(object):
 
     def __str__(self):
         net_id = self.net_id if "net_id" in self.__dir__() else ""
-        return "node: %s.%d addr:(%s:%d) %s(d=%d) online=%s " % (net_id,self.node_id,
-                                                         self.ip, self.port,
+        return "node: %d.%d addr:%s %s (d=%d) %s " % (net_id,self.node_id,
+                                                         "%s:%d"%self.external_addr,
                                                          NAT_STRING[self.nat_type], self.distance,
-                                                         self.status,)
+                                                         "online" if self.status else "offline")
+
+    def set_status(self,status):
+        if status == self.status:
+            return 
+        logging.info("%s is %s!" % (self.node_id,"offline" if not status else "online"))            
+        self.status = status
+        if not status:
+            self.distance = 10
 
     def dump_dict(self, detail=False):
         node_dict = {"node_id":self.node_id, "ip":self.ip, "port":self.port,
                     "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
-                    "secret":self.secret, }
+                    "secret":self.secret,"net_id":self.net_id }
 
         if detail:
             node_dict.update({"status":self.status, "last_out":self.last_out,
@@ -145,13 +150,10 @@ class PPNode(object):
             self.node_id = int(nodedict["node_id"])
         if "net_id" in nodedict:
             self.net_id = int(nodedict["net_id"])
-        if "ip" in nodedict:
-            self.ip = nodedict["ip"]
-        if "port" in nodedict:
-            try:
-                self.port = int(nodedict["port"])
-            except:
-                self.port = 0
+        if "local_addr" in nodedict:
+            self.local_addr = nodedict["local_addr"]
+        if "external_addr" in nodedict:
+            self.external_addr = nodedict["external_addr"]
         if "nat_type" in nodedict:
             self.nat_type = int(nodedict["nat_type"])
         if "will_to_turn" in nodedict:
@@ -171,6 +173,16 @@ class PPNode(object):
         if "distance" in nodedict:
             self.distance = int(nodedict["distance"])
         return self
+    
+    def getToken(self,sequence):
+        return b""*4
+    
+    def authenticate(self,ppmsg):
+        '''
+        to do and  authencation
+        '''
+        
+        return True
 
 PP_APPID = {
           "Auth":1,
@@ -193,8 +205,11 @@ PP_APPID = {
 
 class PPMessage(object):
     '''
-    src_id   dst_id   app_id  sequence needack+ttl applen  appdata
-    4byte    4byte    2byte   4byte    1b+000+4bit         2byte   applen
+    Frame：
+    net_id        4Bytes
+    net_token     4Bytes
+    src_id   dst_id    sequence  needack+ttl    app_id  applen   appdata
+    4byte    4byte   4byte        1b+000+4bit   2byte   2byte      applen
 
     appid:     app        appdata
 
@@ -282,6 +297,13 @@ class PPMessage(object):
         return appid2name.get(app_id, "Unknown")
     pass
 
+    @staticmethod
+    def unpackip(bin_ip):
+        return socket.inet_ntoa(struct.pack('I', socket.htonl(struct.unpack("I",bin_ip)[0])))    
+    @staticmethod 
+    def packip(ip):
+        return struct.pack("I",socket.ntohl(struct.unpack("I", socket.inet_aton(ip))[0]))     
+
 
 class PPApp(object):
     '''
@@ -335,7 +357,6 @@ class PPApp(object):
             self.parameter_type = parameter_type
             super().__init__(**kwargs)
             self.dict_data["app_id"] = app_id
-#             super().__init__(app_id, parameter_type=parameter_type, **kwargs)
 
         def load(self, bindata):
             try:
@@ -363,28 +384,20 @@ class PPApp(object):
             return self
 
         def dump(self):
-#             print(self.dict_data)
             command = self.tags_id[self.dict_data["command"]]
             parameters = self.dict_data["parameters"].copy()
-#             print("command %d parameters %s %s"%(command,parameters,self.tags_id))
             temp_dictdata = {"parameters": {}}
             for para in parameters:
                 if para in self.tags_id:
                     temp_dictdata["parameters"][self.tags_id[para]] = parameters[para]
-#             print("dump dict_data %s"%self.dict_data)
 
             data = struct.pack("BB",
                                command, len(self.dict_data["parameters"])
                                 )
             data_parameters = self.dict2data(temp_dictdata)
-#             print(data_parameters)
             for tag in data_parameters:
                 data += self.dump_TLV((tag, len(data_parameters[tag]), data_parameters[tag]))
-
-#             print("dump %s"%data)
             return data
-#
-#             return super().dump()
 
         def dict2data(self,dict_data):
             data_parameters = {}
@@ -512,35 +525,39 @@ class Receiver(PPApp):
             logging.debug("%d receive %s (seq=%d)(ttl=%d) from %s to %s addr %s!" % (self.station.node_id,
                             PPMessage.app_string(ppmsg.get("app_id")), ppmsg.get("sequence"),ppmsg.get("ttl"),
                             ppmsg.get("src_id"), ppmsg.get("dst_id"), addr))
-            logging.debug(ppmsg.dict_data)
+#             logging.debug(ppmsg.dict_data)
         except Exception as exp:
             logging.warning("can't decode %s from (%s,%d) Error %s " % (data, addr[0], addr[1], exp))
             return
         self.process_msg(ppmsg, addr)
 
     def process_msg(self, ppmsg, addr):
-        dst_id = ppmsg.get("dst_id")
+
+        net_id = ppmsg.get("net_id")
+        if self.station.net_id:
+            if net_id == self.station.net_id :
+                if not self.station.authenticate(ppmsg):
+                    return  #discard authenticate failue 
+
+        dst_id = ppmsg.get("dst_id")            
         if dst_id == self.station.node_id or dst_id == BroadCastId:
             sequence = ppmsg.get("sequence")
             src_id = ppmsg.get("src_id")
             app_id = ppmsg.get("app_id")
             # 回响应包
             if  ppmsg.get("ttl") & 0x80 and not dst_id == BroadCastId:
-#                 print(src_id,sequence,addr)
                 self.station.ackor.send_ack(src_id,sequence,addr)
 
-            if (src_id,sequence) in self.in_queue:
-                    logging.debug("duplication message!")
-                    logging.debug(self.in_queue)
+            if (net_id,src_id,sequence) in self.in_queue:
+                    logging.debug("duplication message! %s"%self.in_queue)
                     return
             else:
-                self.in_queue.append((src_id,sequence))
+                self.in_queue.append((net_id,src_id,sequence))
                 self.in_queue.pop(0)
                 self.station.byte_in += len(ppmsg.get("app_data")) + 20
                 self.station.packet_in += 1
 
             if ppmsg.get("app_id")==PP_APPID["Ack"]:
-#                 print(self.station.ackor.ack_queue)
                 self.station.ackor.process(ppmsg,addr)
                 return
 
@@ -808,6 +825,7 @@ class PPLinker(PPNode):
             sequence = self.tx_sequence
 #            sequence = int(time.time()%100*10000000)
             ppmsg.set("sequence", sequence)
+            ppmsg.set("token",self.getToken(sequence))
 
         sequence = ppmsg.get("sequence")
         addr = (peer.ip,peer.port)
@@ -839,9 +857,7 @@ class PPLinker(PPNode):
         try:
             data, addr = self.sockfd.recvfrom(1500)
             self.neighbor[addr] = 1
-#             if len(self.neighbor)>1 and not self.nat_type== NAT_TYPE["Turnable"]:
-#                 self.nat_type = NAT_TYPE["Turnable"]
-#                 logging.info("%d set self nat type to Turnable for different neighbor %s"%(self.node_id,self.neighbor))
+
             self.byte_in += len(data)
             self.packet_in += 1
             self.not_runing = 0

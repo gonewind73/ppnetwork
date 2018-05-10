@@ -5,48 +5,59 @@ Created on 2018年4月5日
 @author: heguofeng
 '''
 import unittest
-from pp_control import PPNetApp, FakeAppNet
-from pp_tcp import Session, prepare_socket, Beater, PPStation
+from pp_control import PPNetApp, FakeAppNet , Beater, PPStation,Session
 import socket
 import logging
 from _thread import start_new_thread
-from pp_link import PP_APPID, set_debug, NAT_TYPE, BroadCastId
+from pp_link import PP_APPID, set_debug, NAT_TYPE, BroadCastId, PPMessage
 import struct
 import time
 import threading
 import random
 import select
+import sys
 
 
-'''define statics'''
-SOCKS_VER5 = b'\x05'
-METHOD_NO_AUTHENTICATION_REQUIRED = b'\x00'
-METHOD_GSSAPI = b'\x01'
-METHOD_USERNAME_PASSWORD = b'\x02'
-METHOD_IANA_ASSIGNED_MIN = b'\x03'
-METHOD_IANA_ASSIGNED_MAX = b'\x7F'
-METHOD_RESERVED_FOR_PRIVATE_METHODS_MIN = b'\x80'
-METHOD_RESERVED_FOR_PRIVATE_METHODS_MAX = b'\xFE'
-METHOD_NO_ACCEPTABLE_METHODS = b'\xFF'
- 
-CMD_CONNECT = b'\x01'
-CMD_BIND = b'\x02'
-CMD_UDP = b'\x03'
- 
-RSV = b'\x00'
-ATYP_IPV4 = 1
-ATYP_DOMAINNAME = 3
-ATYP_IPV6 = 4
- 
-REP_succeeded = b'\x00'
-REP_general_SOCKS_server_failure = b'\x01'
-REP_connection_not_allowed_by_ruleset = b'\x02'
-REP_Network_unreachable = b'\x03'
-REP_Host_unreachable = b'\x04'
-REP_Connection_refused = b'\x05'
-REP_TTL_expired = b'\x06'
-REP_Command_not_supported = b'\x07'
-REP_Address_type_not_supported = b'\x08'
+# '''define statics'''
+# SOCKS_VER5 = b'\x05'
+# METHOD_NO_AUTHENTICATION_REQUIRED = b'\x00'
+# METHOD_GSSAPI = b'\x01'
+# METHOD_USERNAME_PASSWORD = b'\x02'
+# METHOD_IANA_ASSIGNED_MIN = b'\x03'
+# METHOD_IANA_ASSIGNED_MAX = b'\x7F'
+# METHOD_RESERVED_FOR_PRIVATE_METHODS_MIN = b'\x80'
+# METHOD_RESERVED_FOR_PRIVATE_METHODS_MAX = b'\xFE'
+# METHOD_NO_ACCEPTABLE_METHODS = b'\xFF'
+#  
+# CMD_CONNECT = b'\x01'
+# CMD_BIND = b'\x02'
+# CMD_UDP = b'\x03'
+#  
+# RSV = b'\x00'
+# ATYP_IPV4 = 1
+# ATYP_DOMAINNAME = 3
+# ATYP_IPV6 = 4
+#  
+# REP_succeeded = b'\x00'
+# REP_general_SOCKS_server_failure = b'\x01'
+# REP_connection_not_allowed_by_ruleset = b'\x02'
+# REP_Network_unreachable = b'\x03'
+# REP_Host_unreachable = b'\x04'
+# REP_Connection_refused = b'\x05'
+# REP_TTL_expired = b'\x06'
+# REP_Command_not_supported = b'\x07'
+# REP_Address_type_not_supported = b'\x08'
+
+def prepare_socket(timeout=10,ip="0.0.0.0",port=0):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if not sys.platform.startswith("win"):    
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    if timeout:
+        sock.settimeout(timeout)
+    if port:            
+        sock.bind((ip,port))
+    return sock
 
 class DataLayer(PPNetApp):
     '''
@@ -197,7 +208,7 @@ class DataLayer(PPNetApp):
         '''
         if sock and sock.fileno()>0:
             peer_addr = sock.getpeername()
-            data =  Beater.BeatMessageV2.packip(peer_addr[0])
+            data =  PPMessage.packip(peer_addr[0])
             data += struct.pack("I",peer_addr[1])
             data += struct.pack("I",session[0])
             data += struct.pack("I",session[1])        
@@ -328,33 +339,7 @@ class DataLayer(PPNetApp):
                     self.sessions[session][0].close()
                 except:
                     pass
-    
-#     def get_external_addr(self):
-#         if self.external_addr:
-#             return self.external_addr
-#         for peer_id in self.exchange_nodes:
-#             logging.debug(self.exchange_nodes)
-#             result = self.try_connect(peer_id,(self.station.ip,self.data_port),self.exchange_nodes[peer_id])
-#             if result:
-#                 print("get external_addr %s"%result)
-#                 self.external_addr = (result["ip"],result["port"])
-#                 break
-#         return self.external_addr
-#                 
-#     def try_connect(self,peer_id,self_addr,peer_addr):
-#         self.req_connect(peer_id, self.station.node_id, session=(self.station.node_id,peer_id,999999))
-#         info = None
-# #         sock = prepare_socket(timeout=3,port=self.data_port)
-#         sock = prepare_socket(timeout=3)
-#         try:
-#             sock.connect(peer_addr)        
-#             self.send_peer_info(sock, (self.station.node_id,peer_id,999999))
-#             info = self.get_peer_info(sock)
-#         except Exception as exp:
-#             logging.exception("try connect error %s %s"%(exp,"%s:%d"%peer_addr if peer_addr else "None"))
-#         logging.info(info)
-#         return info
-   
+
     def connectRemote_DL(self,peer_id,session):
         real_session = self.connect(peer_id,session)
         logging.debug("connect session %s %s"%(session,self.sessions))
@@ -487,357 +472,8 @@ class DataLayer(PPNetApp):
                                
             return True
         return False      
-           
-class ProxyBase(object):        
-    def __init__(self,port=7070):
-        self.port = port
-        self.quitting = False
-        self.timer = None
-        self.servsock = None
-        self.count = 0  #session count
-        self.sessions = {}  # {session_id:[client_sock,remote_sock,failurecount]
-        self.session_id = 0
-
-    def start(self):
-        self.quitting = False
-        self.count = 0
-        self.servsock = prepare_socket(timeout=0,port=self.port)
-        logging.info("proxy: --> %s:%d -->" % ('0.0.0.0',self.port))        
-        self.servsock.listen(1000)
-        start_new_thread(self.listen, ())
-        start_new_thread(self.beat_null, ())
-
-    def proxy_start(self):
-        self.quitting = False
-        self.count = 0
-        self.servsock = prepare_socket(timeout=0,port=self.port)
-        logging.info("proxy: --> %s:%d -->" % ('0.0.0.0',self.port))        
-        self.servsock.listen(1000)
-        start_new_thread(self.listen, ())
- 
-
-    def quit(self):
-        self.quitting = True
-        if self.timer:
-            self.timer.cancel()
-            self.timer = None
-        if self.servsock:
-            self.servsock.close()
-            self.servsock = None            
-
-    def listen(self,):
-        while not self.quitting:
-            try:
-                client_sock, client_addr = self.servsock.accept()
-            except Exception as exp:
-                logging.warning(exp)
-                pass
-            else:
-                start_new_thread(self.proxy_receive,(client_sock,client_addr))   
-
-        
-    def beat_null(self):
-        '''
-        just keep nat firewall know it is runing
-        '''
-        logging.debug("proxy server beat null")
-        try:
-            sock = prepare_socket(timeout=10,port=self.port)
-            sock.connect((socket.inet_ntoa(struct.pack('I', socket.htonl(random.randint(1677721600, 1694498816)))),
-                                random.randint(10000, 60000)))
-        except Exception as exp:
-#             logging.warning("error in beat null %s: %s "%(sock,exp.__str__()))
-            pass
-        
-        for s_id in list(self.sessions.keys()):
-            if not self.sessions[s_id][0] or  not self.sessions[s_id][1]:
-                self.sessions[s_id][2] += 1
-                if self.sessions[s_id][2] > 2:
-                    self.sessions.pop(s_id)
-            else:
-                self.sessions.pop(s_id)
-                
-        if not self.quitting:
-            self.timer = threading.Timer(60, self.beat_null)
-            self.timer.start()        
-
-    def connectRemote(self,addr):
-        remote_socket = prepare_socket(timeout = 5)
-        try:
-            remote_socket.connect(addr)
-            remote_socket.settimeout(0)
-            return remote_socket
-        except socket.timeout:
-            pass
-        except Exception as exp:
-            logging.warning("connect %s error %s"%(addr,exp.__str__()))
-            return None        
-        
-    def proxy(self,client_socket,remote_socket):
-        self.count += 1
-        while True:
-            end = False
-            try:
-                socks = select.select([client_socket, remote_socket], [], [], 3)[0]
-            except Exception as exp:
-                logging.warning(exp.__str__())
-                end = True
-            else:
-                for sock in socks:
-                    try:
-                        data = sock.recv(1024)
-#                         logging.debug("receive data:"%data)
-                    except Exception as exp:
-                        logging.warning(exp.__str__())
-                        end = True
-                    else:
-                        if not data:
-                            continue
-                        else:
-                            try:
-                                if sock is client_socket:
-                                    logging.debug("%d bytes from client %s" % (len(data),data[:20]))
-                                    remote_socket.sendall(data)
-                                else:
-                                    logging.debug( "%d bytes from server %s" % (len(data),data[:20]))
-                                    client_socket.sendall(data)
-                            except Exception as exp:
-                                logging.warning(exp.__str__())
-                                end = True
-            if end:
-                try:
-                    self.count -= 1
-                    client_socket.close()
-                    remote_socket.close()
-                except Exception as exp:
-                    logging.warning(exp.__str__())
-                    pass
-                break
-           
-class ProxyClient(ProxyBase):
-    '''
-    use tcp mode
-    listen on port
-    send2Server(data) 
-    
-    '''
-    def __init__(self,proxy_addr=None,port=7070,connectProxy=None):
-        super().__init__(port)
-        self.setProxy(proxy_addr)
-        if connectProxy:
-            self.connectProxy = connectProxy
-
-    def setProxy(self,proxy_addr=None):
-        self.proxy_addr = proxy_addr
-        return self.proxy_addr
-        
-    def connectProxy(self,session_id):
-        return super().connectRemote(self.proxy_addr)
-        
-    def proxy_receive(self,client_sock,client_addr):
-        logging.debug("%s %s"%(client_sock,client_addr))
-        self.session_id += 1
-        self.sessions[self.session_id] = [client_sock,None,0]
-        remote_socket = self.connectProxy(self.session_id)
-        if remote_socket:
-            start_new_thread(self.proxy,(self.sessions[self.session_id][0],remote_socket))
-
-                        
-
-class ProxyServer(ProxyBase):    
-    '''
-    wait on port accept proxy client connect
-
-    '''
-    def __init__(self,send2Peer=None,port=7070):
-        self.quitting = False
-        self.send2Peer= send2Peer
-        self.port = port
-        self.sessions = {}   #{(node_id,session_id):[stage,socket,session]}
-        self.timer = None
-        self.count = 0
-        
-
-    def listen(self,):
-        while not self.quitting:
-            client_sock, client_addr = self.servsock.accept()
-            start_new_thread(self.proxy_receive,(client_sock,client_addr))    
-         
-
-    def proxy_receive(self,client_sock,client_addr):
-        try:
-            data = client_sock.recv(7)
-            if data:
-                logging.debug(" proxy server receive data:(%d) %s "%(len(data),data[:20]))
-#         except socket.timeout:
-        except:
-            return 
-        if data[:7]==b"CONNECT":
-            self.init_http(client_sock, data)
-        else:
-            self.init_sock5(client_sock, data)
-        
-
-    def init_sock5(self,client_sock,data):
-        if len(data)>2:
-            socks_version = data[0]
-            if not socks_version == 5:
-                logging.warning("discard error message %s"%data[:20])
-                return
-            method_number = data[1]
-            methods_client_supported = data[2:2+method_number]
-            logging.debug("client support method %s"%methods_client_supported)
-            client_sock.sendall(SOCKS_VER5+METHOD_NO_AUTHENTICATION_REQUIRED)
-            
-            data = client_sock.recv(4)
-            socks_version,command,rsv,address_type = data[:4]
-            logging.debug("version %s command %s address_type %s"%(socks_version,command,address_type))
-            address = data[3:4]
-            if address_type == ATYP_DOMAINNAME:
-                address += client_sock.recv(1)
-                domain_length = address[1]
-                address += client_sock.recv(domain_length+2)
-                domain = address[2:2+domain_length]
-                port = address[2+domain_length:]
-                hostname = domain.decode()
-            elif address_type == ATYP_IPV4:
-                domain_length = 0
-                address += client_sock.recv(6)
-                domain = address[1:5]
-                hostname = '%s.%s.%s.%s' % (str(domain[0]), str(domain[1]), str(domain[2]), str(domain[3]))
-                port = address[5:7]
-            else:
-                return False
-            logging.debug("address %s hostname %s port %s"%(address,hostname,port))
-            nport = struct.unpack(">H",port)[0]
-                
-            remote_socket = self.connectRemote(addr=(hostname, nport))
-            if remote_socket:
-                logging.info("connect remote %s:%d success. "%(hostname, nport))
-                reply = SOCKS_VER5 + REP_succeeded +RSV + address
-                client_sock.sendall(reply)
-                start_new_thread(self.proxy, (client_sock,remote_socket))
-            else:
-                reply = SOCKS_VER5 + REP_Network_unreachable
-                client_sock.sendall(reply)
-        pass
-                
-    def init_http(self,client_sock,data):
-        data1 = client_sock.recv(1024)
-        data += data1
-        logging.debug("receive data %s"%data[:20])
-        parts = data.decode().split(" ")
-        if parts[0]=="CONNECT":
-            host_port = parts[1].split(":")
-            logging.debug("receive connect to %s"%host_port)
-        else:
-            logging.warning(parts)
-            return
-            
-        remote_socket = self.connectRemote(addr=(host_port[0], int(host_port[1])))
-        if remote_socket:
-            logging.info("connect remote %s:%d success. set stage 1 socket %s"%(host_port[0], int(host_port[1]),remote_socket) )
-            client_sock.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")           
-            start_new_thread(self.proxy, (client_sock,remote_socket))
-
-
-class PPProxy(PPNetApp):
-    def __init__(self,station,proxy_node,data_port=7070,proxy_port=6000):
-        super().__init__(station=station,app_id= PP_APPID["Proxy"] )
-        self.proxy_node = proxy_node
-        self.proxy_port = proxy_port
-        self.is_running = False
-        self.proxy = None
-        
-    def start(self):
-        super().start()
-        self.start_proxy()
-        return self
-            
-    def start_proxy(self):
-        if self.proxy_node == self.station.node_id:
-            self.proxy = ProxyServer(port=self.proxy_port)
-            self.is_proxy_server = True
-        else:
-            self.proxy = ProxyClient(port=self.proxy_port)
-            self.is_proxy_server = False
-        self.proxy.start = self.proxy.proxy_start            
-        if self.is_proxy_server:
-            self.station.datalayer.output_process = lambda x,y,z: self.proxy.proxy_receive(x,y)
-            self.proxy.start()
-            self.is_running  = True             
-        else:
-#             self.input_process = self.proxy_client
-            self.is_running  = False 
-            self.failure_count = 0
-            self.proxy.connectProxy = lambda session_id: self.station.datalayer.connectRemote_DL(self.proxy_node,
-                                                            (self.station.node_id,self.proxy_node,session_id))
-            start_new_thread(self.waitProxyServer, ())        
-            
-    def stop_proxy(self):
-        if self.proxy:
-            self.proxy.quit()
-        self.is_running = False
-
-#     def connectRemote_DL(self,peer_id,session_node,session_id):
-#         session = self.station.datalayer.connect(peer_id,session_node,session_id)
-#         logging.debug("connect session %s %s"%(session,self.station.datalayer.sessions))
-#         if session in self.station.datalayer.sessions:
-#             return self.station.datalayer.sessions[session][0]
-#         else:
-#             return None
-
-    def waitProxyServer(self):
-        if self.proxy_node in self.station.peers and self.station.peers[self.proxy_node].status:
-            if not self.is_running :
-                self.failure_count += 1
-                self.set_status(True)
-        else:
-            self.set_status(False)
-        if not self.station.quitting: 
-            if self.failure_count<3:
-                self.timer = threading.Timer(1, self.waitProxyServer)
-                self.timer.start()
-            else:
-                print("connect to proxy server %d failure!!!"%self.proxy_node)        
-
-            
-    def set_status(self,status=True):
-        if status:
-            session = self.station.datalayer.connect(peer_id=self.proxy_node)
-            logging.info("session %s %s",session,self.station.datalayer.sessions)
-            if session in self.station.datalayer.sessions and self.station.datalayer.sessions[session][0]:
-                print("proxy server online,start to proxy")
-                self.proxy.start()
-                self.is_running = True
-            else:
-                print("can't connect server, offline!")
-        else:
-            if self.is_running:
-                print("proxy server offline,stop proxy")
-                self.proxy.quit()
-                self.is_running = False            
-
-
-    def run_command(self, command_string):
-        cmd = command_string.split(" ")
-        if cmd[0] in ["stat","proxy"]:
-            if cmd[0] =="stat":
-                print("proxy server %d  self listen on port %d %s"%(self.proxy_node,self.proxy_port,
-                                                    "is runing " if self.is_running else "not run"))
-            if cmd[0] =="proxy" and len(cmd)>=2:
-                print("proxy node set to :%d "%(int(cmd[1]))) 
-                self.stop_proxy()
-                self.proxy_node =  int(cmd[1])
-                self.start_proxy()
-
-                               
-            return True
-        return False        
-
 
 class Test(unittest.TestCase):
-
 
     def setUp(self):
         set_debug(logging.DEBUG, "")
@@ -849,7 +485,6 @@ class Test(unittest.TestCase):
         self.stationA.set_process(processes)
         self.stationB.set_process(processes)           
         pass
-
 
     def tearDown(self):
 
@@ -880,25 +515,6 @@ class Test(unittest.TestCase):
         self.assertEqual(s.receive_size, 10, "test session")
         self.assertEqual(s.send_size, 10, "test session")
 
-
-
-    def TtestSock5(self):
-        self.client.start()
-        self.server.start()
-        time.sleep(1)
-        input(prompt="anykey to quit")
-        self.client.quit()
-        self.server.quit()
-        pass
-
-    def TtestProxy(self):
-        client = ProxyClient(proxy_addr=("127.0.0.1",7070),send2Peer = None, port = 443)
-        server = ProxyServer(port=7070,send2Peer= None)
-        server.start()
-        client.start()
-        s=input()
-        server.quit()
-        client.quit()
         
     def testDataLayer(self):
         self.client = DataLayer(self.stationA,data_port=7200)

@@ -579,84 +579,9 @@ class Texter(PPNetApp):
             self.callback(node_id, text)
 
 class Beater(PPNetApp):
-    tags_id = {
-      "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,
-      "bin_node":0x10, "bin_peer":0x11,"bin_path":0x15,
-      "net_id":0x12,"timestamp":0x13,"error_info":0x14}
-    tags_string = {
-      1:"beat_req",2:"beat_res",3:"beat_set",4:"offline",5:"find_node",
-      0x10:"bin_node", 0x11:"bin_peer",0x15:"bin_path",
-      0x12:"net_id",0x13:"timestamp",0x14:"error_info"}
-    
-    class BeatMessage(PPMessage):
-        '''
-        beat_cmd :1Byte   beatreq 0x01 beatres 0x02 beatset 0x03 offline 0x04
-        selfnode_info:
-            node_id:      4Byte 
-            ip:           4Byte
-            port:         2Byte
-            nattype:      1Byte
-            will_to_turn: 1Byte
-            secret:       8Byte
-        dstnode_info:
-            node_id:      4Byte 
-            ip:           4Byte
-            port:         2Byte
-            nattype:      1Byte
-            will_to_turn: 1Byte
-            secret:       8Byte
-        dict_data={ beat_type: 1,
-                    node: {node_id,ip,port,nat_type,will_to_turn,secret}
-                    peer: {node_id,ip,port,nat_type,will_to_turn,secret}
-                    }
-        '''
-        
-        def __init__(self, **kwargs):
-            super().__init__(**kwargs)
-            self.dict_data["app_id"] = PP_APPID["Beat"]
-       
-        def load(self, bindata):
-            try:
-                result = struct.unpack("B20s20sI", bindata)
-                self.dict_data["beat_cmd"] = result[0]
-                self.dict_data["node"] = self._load_node(result[1])
-                self.dict_data["peer"] = self._load_node(result[2])
-                self.dict_data["timestamp"] = result[3]
-            except Exception as exp:
-                logging.debug("error when decode beatmessage %s" % bindata)     
-                logging.debug(exp)
-            return self
-        
-        def _load_node(self, bindata):
-            node_info = {}
-            result = struct.unpack("IIHBB8s", bindata)
-            node_info["node_id"] = result[0]
-            node_info["ip"] = socket.inet_ntoa(struct.pack('I', socket.htonl(result[1])))
-            node_info["port"] = result[2]
-            node_info["nat_type"] = result[3]
-            node_info["will_to_turn"] = (result[4] == 1)
-            node_info["secret"] = result[5].decode()
-            return node_info
-        
-        def dump(self):
-            data = struct.pack("B20s20sI",
-                               self.dict_data["beat_cmd"],
-                               self._dump_node(self.dict_data["node"]),
-                               self._dump_node(self.dict_data["peer"]),
-                               int(time.time()),
-                               )
-            return data
-        
-        def _dump_node(self, node_info):
-            return struct.pack("IIHBB8s",
-                               node_info["node_id"],
-                               socket.ntohl(struct.unpack("I", socket.inet_aton(node_info["ip"]))[0]),
-                               node_info["port"],
-                               node_info["nat_type"],
-                               1 if node_info["will_to_turn"] else 0,
-                               node_info["secret"].encode(),)
-    pass
-    class BeatMessageV2(PPApp.AppMessage):
+
+
+    class BeatMessage(PPApp.AppMessage):
         '''
         beat_cmd :1Byte   beatreq 0x01 beatres 0x02 beatset 0x03 offline 0x04 
         paralen = 3
@@ -693,49 +618,32 @@ class Beater(PPNetApp):
         
 
         def __init__(self, **kwargs):
-#             tags_id = {
-#               "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,
-#               "bin_node":0x10, "bin_peer":0x11,"bin_path":0x15,
-#               "net_id":0x12,"timestamp":0x13,"error_info":0x14}
-#             tags_string = {
-#               1:"beat_req",2:"beat_res",3:"beat_set",4:"offline",5:"find_node",
-#               0x10:"bin_node", 0x11:"bin_peer",0x15:"bin_path",
-#               0x12:"net_id",0x13:"timestamp",0x14:"error_info"}
+            tags_id = {
+              "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,
+              "bin_node":0x10, "bin_peer":0x11,"bin_path":0x15,
+              "net_id":0x12,"timestamp":0x13,"error_info":0x14}
             parameter_type = {0x10:"s",0x11:"s",0x15:"s",
                               0x12:"str",0x13:"I",0x14:"str"}
             super().__init__(app_id=PP_APPID["Beat"],
-                             tags_id=Beater.tags_id,
-                             tags_string=Beater.tags_string,
+                             tags_id=tags_id,
+                             tags_string=None,
                              parameter_type=parameter_type,
                              **kwargs)
         
         def load(self,bindata):
-            if len(bindata)==48:
-                beat_msg = Beater.BeatMessage(bindata=bindata)
-                self.load_old(beat_msg)
-            else:
-                super().load(bindata)
+            super().load(bindata)
 #                 print(self.dict_data)
-                if "bin_node" in self.dict_data["parameters"]:
-                    self.dict_data["parameters"]["node"] = self._load_node(self.dict_data["parameters"]["bin_node"])
-                    del self.dict_data["parameters"]["bin_node"]
-                if "bin_peer" in self.dict_data["parameters"]:
-                    self.dict_data["parameters"]["peer"] = self._load_node(self.dict_data["parameters"]["bin_peer"])
-                    del self.dict_data["parameters"]["bin_peer"]
-                if "bin_path" in self.dict_data["parameters"]:
-                    self.dict_data["parameters"]["path"] = self._load_path(self.dict_data["parameters"]["bin_path"])
-                    del self.dict_data["parameters"]["bin_path"]
-                self.dict_data["parameters"]["beat_version"]=2
-                pass
+            if "bin_node" in self.dict_data["parameters"]:
+                self.dict_data["parameters"]["node"] = self._load_node(self.dict_data["parameters"]["bin_node"])
+                del self.dict_data["parameters"]["bin_node"]
+            if "bin_peer" in self.dict_data["parameters"]:
+                self.dict_data["parameters"]["peer"] = self._load_node(self.dict_data["parameters"]["bin_peer"])
+                del self.dict_data["parameters"]["bin_peer"]
+            if "bin_path" in self.dict_data["parameters"]:
+                self.dict_data["parameters"]["path"] = self._load_path(self.dict_data["parameters"]["bin_path"])
+                del self.dict_data["parameters"]["bin_path"]
+            pass
        
-        def load_old(self, beat_msg):
-            self.dict_data["command"] = beat_msg.get("beat_cmd")
-            self.dict_data["parameters"] ={"node":beat_msg.get("node"),
-                                           "peer":beat_msg.get("peer"),
-                                           "timestamp":beat_msg.get("timestamp"),
-                                           "beat_version":1,}
-            return self
-        
         def _load_node(self, bindata):
             node_info = {}
             result = struct.unpack("IIHBB8s", bindata)
@@ -748,26 +656,14 @@ class Beater(PPNetApp):
             return node_info
         
         def dump(self):
-            if "beat_version" in self.dict_data["parameters"] and self.dict_data["parameters"]["beat_version"]==1:
-                return self.dump_old()
             if "node" in self.dict_data["parameters"]:
                 self.dict_data["parameters"]["bin_node"] = self._dump_node(self.dict_data["parameters"]["node"])
             if "peer" in self.dict_data["parameters"]:
                 self.dict_data["parameters"]["bin_peer"] = self._dump_node(self.dict_data["parameters"]["peer"])
             if "path" in self.dict_data["parameters"]:
                 self.dict_data["parameters"]["bin_path"] = self._dump_path(self.dict_data["parameters"]["path"])
-            self.dict_data["parameters"]["beat_version"]=2
 #             print(self.dict_data)
             return super().dump()
-            
-        def dump_old(self):
-            data = struct.pack("B20s20sI",
-                               self.dict_data["command"],
-                               self._dump_node(self.dict_data["node"]),
-                               self._dump_node(self.dict_data["peer"]),
-                               int(time.time()),
-                               )
-            return data
         
         def _dump_node(self, node_info):
             return struct.pack("IIHBB8s",
@@ -851,20 +747,15 @@ class Beater(PPNetApp):
         if peer.ip == "0.0.0.0" or peer.ip == self.station.ip:
             return False 
         
-        if peer.beat_version == 1:
-            beat_dictdata = {"beat_cmd":self.tags_id[beat_cmd]}
-            beat_dictdata["node"] = self.station.beat_info()
-            beat_dictdata["peer"] = peer.beat_info()
-            beat_msg = Beater.BeatMessage(dictdata=beat_dictdata)
-        else:
-            beat_dictdata = {"command":beat_cmd,
-                             "parameters":{
-                                 "node":self.station.beat_info(),
-                                 "peer":peer.beat_info(),
-                                 "net_id":self.station.net_id,
-                                 "timestamp":int(time.time())
-                                 }}
-            beat_msg = Beater.BeatMessageV2(dictdata=beat_dictdata)
+
+        beat_dictdata = {"command":beat_cmd,
+                         "parameters":{
+                             "node":self.station.beat_info(),
+                             "peer":peer.beat_info(),
+                             "net_id":self.station.net_id,
+                             "timestamp":int(time.time())
+                             }}
+        beat_msg = Beater.BeatMessageV2(dictdata=beat_dictdata)
             
         
         if beat_cmd == "offline":
@@ -882,17 +773,13 @@ class Beater(PPNetApp):
 #     def send_beatV2(self,peerid, beat_cmd=_BEAT_CMD["beat_req"], is_try=False):
 #         
     
-    def processV2(self,msg,addr):
+    def process(self,msg,addr):
         '''
         #修改心跳者信息，若有更新的其他peer信息也同步修改
         #node is beat_src  peer is self
         '''
         btmsg = Beater.BeatMessageV2(bindata=msg.get("app_data"))   
         logging.debug("%d receive btmsg %s"%(self.station.node_id,btmsg.dict_data))
-        beat_version = btmsg.get("parameters")["beat_version"]
-        if beat_version == 1 :
-            self.process(msg,addr)
-            return
         
         net_id = btmsg.get("parameters")["net_id"]
         if not self.station.net_id == "public" and not net_id in (self.station.net_id,"public"):
@@ -920,146 +807,6 @@ class Beater(PPNetApp):
             self.send_beat(parameters["node"]["node_id"], beat_cmd="beat_res", is_try=True)
         return
          
-
-    def process(self, msg, addr):
-        '''
-        #修改心跳者信息，若有更新的其他peer信息也同步修改
-        #node_id = msg.get("node_info")["node_id"]
-        '''
-        btmsg = Beater.BeatMessage(bindata=msg.get("app_data"))
-        distance = 7 - msg.get("ttl") & 0x0f
-        logging.debug(btmsg.dict_data)
-       
-        
-        # wrong node id
-        if btmsg.get("peer")["node_id"] == 0:  
-            logging.warning("there are wrong node_id,maybe someone use your id,please check it!")
-            print("there are wrong with your node_id,maybe someone use your node_id!")
-            self.station.quitting = True
-            return 
-      
-        if btmsg.get("peer")["node_id"] == self.station.node_id:
-            self.set_self_info(btmsg.get("peer"), addr, distance)
-        command = self.tags_string[btmsg.get("beat_cmd")]
-        self.set_peer_info(command, btmsg.get("node"), btmsg.get("timestamp"), addr, distance)
-#             
-#         if btmsg.get("peer")["node_id"] == self.station.node_id and distance == 1 \
-#                 and not btmsg.get("peer")["ip"] == "0.0.0.0" \
-#                 and not self._is_private_ip(btmsg.get("peer")["ip"]):
-#             if not self.station.status:
-#                 self.station.ip = btmsg.get("peer")["ip"]
-#                 self.station.port = btmsg.get("peer")["port"]
-#                 nat_type = btmsg.get("peer")["nat_type"]
-#                 self.station.nat_type = nat_type if not nat_type == NAT_TYPE["Unknown"] else self.station.nat_type
-#                 logging.info("set self nattype to %s from peer!" % NAT_STRING[self.station.nat_type])
-#                 self.station.status = True
-# #                 self.beat_interval = 1
-#                 self.station.publish()
-# #                 if btmsg.get("beat_cmd")==_BEAT_CMD["beat_req"]:
-# #                     self.nat_type = NAT_TYPE["Turnable"]
-#                 self.station.last_beat_addr = addr
-#                 logging.info("%s connect to the world." % self.station.node_id)
-#             else:
-#                 if self.station.ip == btmsg.get("peer")["ip"] and self.station.port == btmsg.get("peer")["port"]:
-#                     if not self.station.last_beat_addr == addr:
-#                         self.station.nat_type = NAT_TYPE["Turnable"] 
-#                         logging.debug("set self nattype to %s for differen connect" % NAT_STRING[self.station.nat_type])
-#                         self.station.last_beat_addr = addr
-#                 else:
-#                     if self.station.ip == "0.0.0.0":
-#                         self.station.ip = btmsg.get("peer")["ip"]
-#                         self.station.port = btmsg.get("peer")["port"]
-#                         self.station.nat_type = btmsg.get("peer")["nat_type"]
-#                         logging.info("set self info to %s from peer!" % NAT_STRING[self.station.nat_type])
-#                         
-#                     else:
-#                         self.station.nat_type = NAT_TYPE["Unturnable"]
-#                         logging.debug("set self nattype to %s for not same ip port" % NAT_STRING[self.station.nat_type])
-                   
-#         node_id = btmsg.get("node")["node_id"]
-#         if node_id == 0:
-#             return 
-#         if node_id not in self.station.peers:
-#             self.station.peers[node_id] = PPNode(node_id=node_id)
-#             
-#         peer = self.station.peers[node_id]
-#         peer.delay = (int(time.time() - btmsg.get("timestamp")) + peer.delay)/2
-#         
-#         if btmsg.get("beat_cmd") == _BEAT_CMD["offline"]:
-#             peer.status = False
-#             peer.distance = 10
-#             logging.info("%s is offline." % node_id)
-#             return
-#  
-#         if not btmsg.get("peer")["nat_type"] == NAT_TYPE["Unknown"] and distance <= peer.distance \
-#                 and self.station.nat_type == NAT_TYPE["Unknown"]:
-#             self.station.nat_type = btmsg.get("peer")["nat_type"]
-#             logging.debug("set self nattype to %s from peer info" % NAT_STRING[self.station.nat_type])
-#        
-# #         wrong id
-# #         if peer.status  and not self._is_private_ip(peer.ip) \
-# #             and btmsg.get("node")["ip"] == "0.0.0.0": 
-# #             src_id = msg.get("src_id")
-# #             dst_id = msg.get("dst_id")
-# #             node_info = btmsg.get("node")
-# #             node_info["node_id"] = 0
-# #             btmsg.set("peer",node_info)
-# #             msg.set("app_data",btmsg.dump())
-# #             msg.set("dst_id", src_id)
-# #             msg.set("src_id",dst_id)
-# #             msg.set("sequence",0xffffffff)
-# #             self.sockfd.sendto(msg.dump(),addr)
-# #             return
-# #         
-# #         if peer.distance < distance and peer.status:
-# #             return
-#         
-#         if not peer.status:
-#             peer.load_dict({"status":True, "beat_interval":1})
-#             logging.info("%s is online." % node_id)
-# 
-#         # 部分nat 连接会更改端口
-#         if distance == 1:
-#             peer.load_dict(btmsg.get("node"))
-#             peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance})
-#             if btmsg.get("node")["ip"] == "0.0.0.0":
-#                 self.send_beat(node_id, _BEAT_CMD["beat_res"], is_try=True)
-# #                 peer.status = False
-# #             elif (not btmsg.get("node")["ip"] == addr[0] or not btmsg.get("node")["port"] == addr[1]):
-# #                 peer.nat_type = NAT_TYPE["Unturnable"]
-#         else:
-#             if distance < peer.distance :
-#                 peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance})
-#                 
-#             node_info = btmsg.get("node")
-#             if  (node_info["nat_type"] == NAT_TYPE["Turnable"] or node_info["nat_type"] == NAT_TYPE["Unknown"]) \
-#                     and node_info["ip"] != peer.ip \
-#                     and node_info["ip"] != self.station.ip and not node_info["ip"] == "0.0.0.0" \
-#                     and btmsg.get("beat_cmd") == _BEAT_CMD["beat_req"] :
-#                 old_node_info = peer.dump_dict()
-#                 peer.load_dict(node_info)
-#                 peer.load_dict({"nat_type":NAT_TYPE["Turnable"]})
-#                 logging.info("peer turnable try to direct connect to : %d,%s,%d,%s" % (peer.node_id, peer.ip, peer.port, NAT_STRING[peer.nat_type]))
-#                 self.send_beat(node_id, _BEAT_CMD["beat_res"], is_try=True)   
-#                 peer.load_dict(old_node_info)
-#                 peer.load_dict({"nat_type":NAT_TYPE["Unturnable"]})
-#                 
-#             if  self.station.nat_type in (NAT_TYPE["Turnable"] ,NAT_TYPE["Unknown"]) \
-#                     and node_info["ip"] != peer.ip \
-#                     and node_info["ip"] != self.station.ip and not node_info["ip"] == "0.0.0.0":
-#                 old_node_info = peer.dump_dict()
-#                 peer.load_dict(node_info)
-#                 logging.info("self turnable try to direct connect to : %d,%s,%d,%s" % (peer.node_id, peer.ip, peer.port, NAT_STRING[peer.nat_type]))
-#                 self.send_beat(node_id, _BEAT_CMD["beat_req"], is_try=True)   
-#                 peer.load_dict(old_node_info)
-#                 
-#             if peer.nat_type == NAT_TYPE["Unknown"]:
-#                 peer.nat_type = node_info["nat_type"]
-#                       
-#         peer.beat_interval = 1
-        if btmsg.get("beat_cmd") == _BEAT_CMD["beat_req"]:
-            self.send_beat(btmsg.get("node")["node_id"], beat_cmd="beat_res", is_try=True)
-                
     def beat_null(self):
         '''
         just keep nat firewall know it is runing
@@ -1436,6 +1183,7 @@ class PPStation(PPLinker):
     def set_app_process(self, appid, app_process):
         self.process_list[appid] = app_process
         pass
+    
     def get_app_process(self, appid):
         return self.process_list[appid]
         pass    
