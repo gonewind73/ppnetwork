@@ -362,12 +362,19 @@ class PathRequester(PPNetApp):
             for i in range(0, end):
                 node_id = path[i ][0]
                 if node_id not in self.station.peers:
-                    self.station.peers[node_id] = PPNode(node_id=node_id, ip=path[i ][1], port=path[i ][2], nat_type=NAT_TYPE["Turnable"])
-#               # try send beat direct
+                    self.station.peers[node_id] = PPNode(node_id=node_id)
+                node = self.station.peers[node_id]
+                if not (node.ip,node.port) == (path[i ][1],path[i ][2]): 
+                    node.load_dict({"ip": path[i ][1], "port":path[i ][2],
+                                     "nat_type":NAT_TYPE["Turnable"],"turn_server":0})
+                    self.station.set_status(node_id,False)
+    #               # try send beat direct
                     self.station.beater.send_beat(node_id, "beat_req", is_try=True)
-            # try beat src by turn node 
-            if end == 2 and path[1][1] not in ("0.0.0.0",self.station.ip) and path[1][3] == NAT_TYPE["Turnable"]:
-                self.station.peers[path[0][0]].load_dict({"ip":path[1][1], "port":path[1][2], "nat_type":NAT_TYPE["Unturnable"]})
+            # try beat src by turn node         
+            peer = self.station.peers[path[0][0]]
+            if end == 2 and path[1][1] not in ("0.0.0.0") and path[1][3] == NAT_TYPE["Turnable"]:
+                peer.load_dict({"turn_server":path[1][0], "nat_type":NAT_TYPE["Unturnable"]})
+                peer.load_dict({"ip":path[1][1], "port":path[1][2]})
                 self.station.beater.send_beat(path[0][0], "beat_req", is_try=True)
 
         if (dst_node_id != self.station.node_id) or (dst_node_id == BroadCastId):            
@@ -877,7 +884,7 @@ class Beater(PPNetApp):
             return 
         if node_id not in self.station.peers:
             self.station.peers[node_id] = PPNode(node_id=node_id)
-            
+                            
         peer = self.station.peers[node_id]
         peer.delay = (int(time.time() - timestamp) + peer.delay)/2
         if parameters:
@@ -918,12 +925,13 @@ class Beater(PPNetApp):
         # 部分nat 连接会更改端口
         if distance == 1:
             peer.load_dict(node_info)
-            peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance})
+            peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance,"turn_server":0})
             if node_info["ip"] == "0.0.0.0":
                 self.send_beat(node_id, beat_cmd="beat_res", is_try=True)
         else:
             if distance < peer.distance :
-                peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance})
+                turn_id = self.station.get_by_addr(addr)
+                peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance,"turn_server":turn_id})
                 
             if  node_info["nat_type"] in ( NAT_TYPE["Turnable"],NAT_TYPE["Unknown"]) \
                     and node_info["ip"] not in (peer.ip,"0.0.0.0",self.station.ip) \
@@ -1150,7 +1158,11 @@ class PPStation(PPLinker):
         self.dump_nodes()    
         super().quit()
         
-
+    def get_peer_by_addr(self,addr):
+        for peer_id in self.peers:
+            if self.peers[peer_id].external_addr == addr:
+                return peer_id
+        return 0
     
     def get_peers_online(self):
 #         socket.setdefaulttimeout(2)
@@ -1176,6 +1188,15 @@ class PPStation(PPLinker):
         else:
             logging.warning("Can't found %d in peers." % node_id)
             return False
+
+    def set_status(self,node_id,status):
+        if node_id in self.peers and not status == self.peers[node_id].status:
+            self.peers[node_id].set_node_status(status)
+            for nid in self.peers:
+                if self.peers[nid].turn_server == node_id:
+                    self.set_status(nid, status)
+#             if not status:
+#                 self.beater.send_offline(node_id)        
     
     def set_app_process(self, appid, app_process):
         self.process_list[appid] = app_process
@@ -1259,13 +1280,15 @@ class PPStation(PPLinker):
         self.peers[peer_id].port = port
         self.peers[peer_id].nat_type = NAT_TYPE["Unturnable"]
         self.peers[peer_id].distance = 10
+        self.set_status(peer_id,False)
+        self.beater.send_beat(peer_id, beat_cmd = "beat_req", is_try=True)            
                     
     def set_route(self, peer_id, turn_id):
+        if peer_id not in self.peers:
+            self.peers[peer_id] = PPNode(node_id = peer_id)
         if turn_id in self.peers and peer_id in self.peers:
-            self.peers[peer_id].ip = self.peers[turn_id].ip
-            self.peers[peer_id].port = self.peers[turn_id].port
-            self.peers[peer_id].nat_type = NAT_TYPE["Unturnable"]
-            self.peers[peer_id].distance = 10
+            self.peers[peer_id].turn_server = turn_id
+            self.set_ipport(peer_id, self.peers[turn_id].ip, self.peers[turn_id].port)
         
     def get_all_nodes(self, delay=2):
         print("Self Info:\n%s\nPeers Info:" % self)

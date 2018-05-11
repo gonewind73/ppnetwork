@@ -23,3 +23,4 @@ node_id 由net_id 内成员判定
 每个data节点自带switch功能，可以连接多个终端设备
 
 ## 
+add max_net_id  max_node_id  自动分配地址

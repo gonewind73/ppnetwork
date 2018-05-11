@@ -114,9 +114,9 @@ class PPNode(object):
 
     def __str__(self):
         net_id = self.net_id if "net_id" in self.__dir__() else ""
-        return "node: %d.%d addr:%s %s (d=%d) %s " % (net_id,self.node_id,
+        return "node: %d.%d addr:%s %s (d=%d t=%d) %s " % (net_id,self.node_id,
                                                          "%s:%d"%self.external_addr,
-                                                         NAT_STRING[self.nat_type], self.distance,
+                                                         NAT_STRING[self.nat_type], self.distance,self.turn_server,
                                                          "online" if self.status else "offline")
 
     def set_status(self,status):
