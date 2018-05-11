@@ -703,7 +703,7 @@ class Beater(PPNetApp):
     def start(self):
         super().start()
         start_new_thread(self.beat, ())
-        self.station.set_app_process(PP_APPID["Beat"], self.processV2)
+        self.station.set_app_process(PP_APPID["Beat"], self.process)
         return self
         
     def beat(self):
@@ -1119,9 +1119,8 @@ class PPStation(PPLinker):
         if config:
             super().__init__(config = config,net_callback=self.process_msg)
             self.db_file = self.config.get("db_file","nodes.pkl")
-            self.net_id = config.get("net_id", "public")
-            self.public = self.net_id == "public"
-            self.node_type = config.get("node_type","server")          
+            self.net_id = config.get("net_id", 0xffffffff)
+            self.net_secret = config.get("net_secret","12345678")
         else:
             raise("Not correct config!")
         self.load_nodes()
@@ -1135,8 +1134,6 @@ class PPStation(PPLinker):
         self.services.update({"beater":self.beater,"texter":self.texter,
                               "path_requester":self.path_requester,
                               "net_manage":self.netmanage})
-        
-
         pass    
 
     def start(self):
@@ -1148,8 +1145,8 @@ class PPStation(PPLinker):
         logging.info("Station is quitting...")
         if self.status:
             self.beater.send_offline()   
-        for service in self.services:
-            self.services[service].quit()
+#         for service in self.services:
+#             self.services[service].quit()
         self.dump_nodes()    
         super().quit()
         
@@ -1271,10 +1268,6 @@ class PPStation(PPLinker):
             self.peers[peer_id].distance = 10
         
     def get_all_nodes(self, delay=2):
-        time.sleep(delay)
-#         self.request_path(BroadCastId, 6)
-        time.sleep(delay)
-
         print("Self Info:\n%s\nPeers Info:" % self)
         for peerid in self.peers:
             print(self.peers[peerid])

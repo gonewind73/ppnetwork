@@ -44,8 +44,6 @@ def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:
                 handlers = [console,]
                 )
 
-
-
 BroadCastId = 0xffffffff
 NAT_TYPE = {"Unknown":7, "Turnable":2, "Unturnable":5}
 NAT_STRING = {2:"Turnable", 7:"Unknown", 5:"Unturnable"}
@@ -63,8 +61,10 @@ class PPNode(object):
         self.net_id = 0
         self.net_secret = ""
 
+        self.ip ="0.0.0.0" 
+        self.port = 0 
         self.local_addr = ("0.0.0.0",0)
-        self.external_addr = ("0.0.0.0",0)
+        self.external_addr = ("0.0.0.0",0) 
         self.nat_type = NAT_TYPE['Unknown']
 
         self.will_to_turn = True
@@ -128,7 +128,7 @@ class PPNode(object):
             self.distance = 10
 
     def dump_dict(self, detail=False):
-        node_dict = {"node_id":self.node_id, "ip":self.ip, "port":self.port,
+        node_dict = {"node_id":self.node_id, "ip":self.external_addr[0], "port":self.external_addr[1],
                     "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
                     "secret":self.secret,"net_id":self.net_id }
 
@@ -144,16 +144,31 @@ class PPNode(object):
         if not self.status:
             node_info["nat_type"] = NAT_TYPE["Unknown"]
         return node_info
+    
+    def _load_addr(self,nodedict):
+        ip,port =  "0.0.0.0",0
+        if "ip" in nodedict:
+            ip = nodedict["ip"]
+        if "port" in nodedict:
+            try:
+                port = int(nodedict["port"])
+            except:
+                port = 0
+        return (ip,port)     
 
     def load_dict(self, nodedict):
         if "node_id" in nodedict:
             self.node_id = int(nodedict["node_id"])
         if "net_id" in nodedict:
             self.net_id = int(nodedict["net_id"])
+        if "ip" in nodedict:
+            self.ip,_ = self._load_addr(nodedict)
+        if "port" in nodedict:
+            _,self.port = self._load_addr(nodedict)
         if "local_addr" in nodedict:
-            self.local_addr = nodedict["local_addr"]
+            self.local_addr = self._load_addr(nodedict["local_addr"])
         if "external_addr" in nodedict:
-            self.external_addr = nodedict["external_addr"]
+            self.external_addr = self._load_addr(nodedict["external_addr"])
         if "nat_type" in nodedict:
             self.nat_type = int(nodedict["nat_type"])
         if "will_to_turn" in nodedict:
@@ -175,6 +190,8 @@ class PPNode(object):
         return self
     
     def getToken(self,sequence):
+        if self.net_id==0xffffffff:
+            return b"\x00"*4
         return b""*4
     
     def authenticate(self,ppmsg):
@@ -694,11 +711,12 @@ class Ackor(PPApp):
 
 class PPLinker(PPNode):
     '''
-    config_dict = { "node_id":100,
+    config_dict = { 
+                    "node_id":100,
                     "node_port":54320,
                     "node_secret":"password",
                     "nodes": [(id,ip,port,type)..] or  "nodes_db":nodes.pkl
-                    "net_id":"public",+
+                    "net_id":"public",
                     "net_secret":"password"}
 
     linker = PPLinker(config = config_dict)
@@ -720,14 +738,14 @@ class PPLinker(PPNode):
             self.config = config
             super().__init__(node_id=config["node_id"],
                              ip = config.get("node_ip", "0.0.0.0"),
-                             port = config.get("node_port", 54320),
+                             port = config.get("node_port", 7071),
                              nat_type = config.get("nat_type",5),
                              will_to_turn=config.get("will_to_turn", True),
                              secret=config.get("node_secret", ""))
         else:
             raise("Not correct config!")
 
-        self.neighbor = {}
+
         self.receiver = Receiver(self,callback = net_callback)
         self.ackor = Ackor(self,callback=ack_callback)
         self.services = {"receiver":self.receiver,"ackor":self.ackor}
@@ -745,7 +763,7 @@ class PPLinker(PPNode):
 
         self.sockfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sockfd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        logging.info("Socket bind to %s,%d" % (self.ip, self.port))
+        logging.info("Socket bind to %s:%d" %(self.ip,self.port))
         try:
             self.sockfd.bind((self.ip, self.port))
         except:
@@ -767,8 +785,12 @@ class PPLinker(PPNode):
     def quit(self):
         logging.info("Linker is quitting...")
         self.quitting = True
-        self.receiver.quit()
-        self.ackor.quit()
+        for service in self.services:
+            self.services[service].quit()
+            logging.info("%s is quit."%service)
+                    
+#         self.receiver.quit()
+#         self.ackor.quit()
         time.sleep(1)
         self.sockfd.close()
 
@@ -809,8 +831,8 @@ class PPLinker(PPNode):
 
     def publish(self):
         # send self info to web directory
-        if  self.nat_type != NAT_TYPE["Unknown"]:  # ChangedAddressError:  #must
-            payload = {"nat_type":self.nat_type, "ip":self.ip, "port":self.port, "net_id":self.net_id, "node_id":self.node_id}
+        if  self.nat_type== NAT_TYPE["Turnable"] and self.net_id==0xffffffff:  # ChangedAddressError:  #must
+            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1], "net_id":self.net_id, "node_id":self.node_id}
             requests.post("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
         pass
 
@@ -823,7 +845,6 @@ class PPLinker(PPNode):
         if ppmsg.get("sequence") == 0:
             self.tx_sequence += 1
             sequence = self.tx_sequence
-#            sequence = int(time.time()%100*10000000)
             ppmsg.set("sequence", sequence)
             ppmsg.set("token",self.getToken(sequence))
 
@@ -856,8 +877,6 @@ class PPLinker(PPNode):
     def _receive(self):
         try:
             data, addr = self.sockfd.recvfrom(1500)
-            self.neighbor[addr] = 1
-
             self.byte_in += len(data)
             self.packet_in += 1
             self.not_runing = 0
@@ -969,7 +988,6 @@ class FakeNet(object):
     2nd way to simulate,is more lower layer:
 
         self.fake_net = FakeNet()
-
         self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
         self.stationA.start()
     '''

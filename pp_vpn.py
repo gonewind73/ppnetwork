@@ -4,7 +4,7 @@ Created on 2018年5月5日
 @author: heguofeng
 '''
 import unittest
-from pp_network import PPNetApp
+from pp_control import PPNetApp
 from pp_link import PP_APPID,set_debug
 from tuntap import WinTap,Tap,TunTap 
 import threading
@@ -12,8 +12,6 @@ from _thread import start_new_thread
 import logging
 import select
 import socket
-from pp_datalayer import PPProxy
-from pp_tcp import prepare_socket
 import sys
 import time
 

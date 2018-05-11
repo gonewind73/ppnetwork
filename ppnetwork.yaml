@@ -1,0 +1,48 @@
+{
+DuplicationMode: 2, 
+FileFolderDeleteConfirm: 'Yes', 
+Version: 1.2.1, 
+last_destination_path: 'C:/Users/heguofeng/eclipse-workspace/FileManage1/image',
+last_folder_path: 'C:/Users/heguofeng/eclipse-workspace', 
+last_source_path: 'C:/Users/heguofeng/eclipse-workspace/FileManage1/build',
+auth_mode: "secret",
+secret: "password",
+share_folder: ".",
+#ppnet 
+#net_id: 0,                   
+node_id: 818300194,
+node_port: 54320,
+node_nic: "无线网卡",
+DebugLevel: 10,
+#DebugFile: 'pplink.log',
+db_file: 'nodes.pkl',
+shell_users:{
+    hgf: hgf,
+    hjy: hjy,},
+#storage
+"node_type": "client",
+"storage_root": 'C:/Users/heguofeng/workspace/FileManage/ppstorage1',
+"storage_net": "private" ,  #home , public, etc
+"nodes" : {
+         918560598: "private",
+         68767904: "private",
+         818300194: "private",
+         },     
+#data 
+"data_port": 9000,
+#proxy
+"proxy_node": 101,
+"proxy_port": 443,
+
+#service
+"services": {
+#        "shell": enable,
+#        "file": enable,
+#        "proxy": enable,
+#      "vpn": enable,
+        },         
+    
+ #vpn
+ vpn_ip: 192.168.33.94,
+ vpn_mask: 255.255.255.0,   
+}

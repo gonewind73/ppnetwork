@@ -12,6 +12,7 @@ from pp_link import set_debug
 import yaml
 import time
 from pp_vpn import PPVPN
+import optparse
 
 
 class PPAppStation(PPStation):
@@ -42,6 +43,7 @@ class PPAppStation(PPStation):
 #         PPStation.run_command(self, command_string)
 
 def main(config):
+
     print("PPAppStation is lanching...")
     station = PPAppStation(config=config)
     station.start()
@@ -53,9 +55,7 @@ def main(config):
         if try_count > 10 or station.quitting:
             break
     print("node_id=%d online=%s" % (station.node_id, station.status))
-    
-#     if station.status:
-#         station.path_requester.request_path(BroadCastId, 6)
+
     node_type = config.get("node_type","server")
     is_client = node_type == "client"
     while not is_client and not station.quitting:
@@ -91,11 +91,15 @@ class Test(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    config = yaml.load(open("fmconfig.yaml"))
-    set_debug(config.get("DebugLevel", logging.WARNING),
-                config.get("DebugFile", ""))
-
-#             config.get("DebugFile", ""),filter=lambda record: record.filename =="pp_datalayer.py" or record.filename =="pp_vpn.py")
-
-    main(config=config)
+    parser = optparse.OptionParser()
+    parser.add_option('--config', default='ppnetwork.yaml',dest='config_file', help='set config file')
+    opt, args = parser.parse_args()
+    if not (opt.config_file):
+        parser.print_help()
+    else:
+        config = yaml.load(open(opt.config_file))
+        set_debug(config.get("DebugLevel", logging.WARNING),
+                    config.get("DebugFile", ""))
+    #             config.get("DebugFile", ""),filter=lambda record: record.filename =="pp_datalayer.py" or record.filename =="pp_vpn.py")
+        main(config=config)
     
