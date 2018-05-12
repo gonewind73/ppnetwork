@@ -1231,7 +1231,7 @@ class PPStation(PPLinker):
             if peer_id in self.peers:
                 peer = self.peers[peer_id]
                 app_data = app_msg.dump()
-                ppmsg = PPMessage(dictdata={"src_id":self.node_id, "dst_id":peer.node_id,
+                ppmsg = PPMessage(dictdata={"net_id":self.net_id,"src_id":self.node_id, "dst_id":peer.node_id,
                                             "app_data":app_data, "app_len":len(app_data),
                                             "app_id":app_msg.get("app_id")})
 #                 if peer.status or always:
