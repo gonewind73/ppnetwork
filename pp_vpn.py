@@ -90,6 +90,9 @@ class VPNBase(object):
             self.tun.close()
         logging.info("vpn quit!")
 
+    def get_dst(self,data):
+        return socket.inet_ntoa(data[16:20])
+        
     def set_peersock(self,ip,peer_sock):
         self.peer_sock[ip] = peer_sock
         start_new_thread(self.receive_peer,(ip,peer_sock,))
@@ -112,7 +115,7 @@ class VPNBase(object):
                     if dst_ip not in self.peer_sock:
                         self.connect(dst_ip)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
-                        self.peer_sock[ip].sendall(data)
+                        self.peer_sock[dst_ip].sendall(data)
                         logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
 
             except OSError as exps:
@@ -234,7 +237,8 @@ class PPVPN(PPNetApp):
 #                 self.proxy.quit()
 #                 self.is_running = False
                 
-    def _connect(self,ip):
+    def _connect(self,sip):
+        ip = ip_stoi(sip)
         if ip not in self.vlan_table:
             node_id = self.wait_arp_req(ip)
         else:
@@ -566,8 +570,9 @@ class TestVPN(unittest.TestCase):
                 continue
             else:
                 print("accept from",conn.getpeername())
+                peerip= conn.getpeername()[0]
                 vpn.start()
-                vpn.set_peersock(conn)
+                vpn.set_peersock(peerip,conn)
                 break
 
         input("any key to quit!")
@@ -595,7 +600,7 @@ class TestVPN(unittest.TestCase):
             else:
                 time.sleep(3)
                 vpn.start()
-                vpn.set_peersock(sock)
+                vpn.set_peersock(server,sock)
                 break
 
         input("any key to quit!")
