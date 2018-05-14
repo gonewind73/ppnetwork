@@ -91,6 +91,7 @@ class VPNBase(object):
         logging.info("vpn quit!")
 
     def get_dst(self,data):
+        logging.debug(socket.inet_ntoa(data[16:20]))
         return socket.inet_ntoa(data[16:20])
         
     def set_peersock(self,ip,peer_sock):
@@ -527,7 +528,7 @@ class TestVPN(unittest.TestCase):
             self.inited = 0   
 
     def setUp(self):
-#         set_debug(logging.DEBUG, "")
+        set_debug(logging.DEBUG, "")
         self.start()
         pass
 
@@ -589,6 +590,7 @@ class TestVPN(unittest.TestCase):
         server=input("server ip,default is 180.153.152.193:")
         if not len(server):
             server = "180.153.152.193"
+        print(server)
         count = 0
         while count<10:
             try:
