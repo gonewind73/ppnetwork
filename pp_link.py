@@ -61,21 +61,21 @@ def wait_result(item,result,times):
         count +=1        
     return item
 
-def do_wait(func,item,result,times):
+def do_wait(func,test_func,times):
     count  = 0
     while count<times:
-        if item == result:
-            return item
+        func()  
         time.sleep(1)
-        count +=1 
-        func()       
-    return item
+        if test_func():
+            return 
+        count +=1      
+    return 
 
 def ip_stoi(ip):
-    return struct.unpack("I", socket.inet_aton(ip))[0]
+    return socket.ntohl(struct.unpack("I", socket.inet_aton(ip))[0])
 
 def ip_itos(ip):
-    return socket.inet_ntoa(struct.pack("I", ip))
+    return socket.inet_ntoa(struct.pack("I", socket.htonl(ip)))
 
 
 BroadCastId = 0xffffffff

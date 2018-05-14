@@ -91,7 +91,6 @@ class VPNBase(object):
         logging.info("vpn quit!")
 
     def get_dst(self,data):
-        logging.debug(socket.inet_ntoa(data[16:20]))
         return socket.inet_ntoa(data[16:20])
         
     def set_peersock(self,ip,peer_sock):
@@ -175,7 +174,7 @@ class PPVPN(PPNetApp):
         
         super().__init__(station=station,app_id= PP_APPID["VPN"] )
         self.vlan_id = config.get("Vlan",0)
-        ip_range = config.get("IPRange",{"start":"192.168.1.1","end":"192.168.1.255"})
+        ip_range = config.get("IPRange",{"start":"192.168.33.1","end":"192.168.33.255"})
         self.ip_range = {"start":ip_stoi(ip_range["start"]),"end":ip_stoi(ip_range["end"])}
         ip = config.get("VlanIP","0.0.0.0")
         self.ip = ip_stoi(ip)
@@ -185,15 +184,16 @@ class PPVPN(PPNetApp):
         self.is_running = False
         self.vlan_table = {}  #{ip:(node_id,last_active)
         if self.ip:
-            self.vlan_table[self.ip] = (self.station.node_id,int(time.time()))
+            self._setNodeIp(self.station.node_id, self.ip)
         self.vpn = None
+        self.testing = False
 #         self.ip,self.mask = ip,mask
 #         self.proxy_node = peer
 #         self.proxy = None
 
     def start(self):
         super().start()
-        start_new_thread(do_wait,(lambda :self.auth_req(BroadCastId),self.is_running,True,3))
+        start_new_thread(do_wait,(lambda :self.auth_req(BroadCastId),lambda: self.is_running==True,3))
         return self
     
     def quit(self):
@@ -202,11 +202,12 @@ class PPVPN(PPNetApp):
 
     def start_vpn(self):
         ip = ip_itos(self.ip)
-        logging.debug(ip)
+        logging.debug("start vpn with ip %s" %ip)
 #         mask = socket.inet_ntoa(self.mask)
         self.vpn = VPNBase(ip,self.mask)
         self.vpn.connect = self._connect
-        self.vpn.start()
+        if not self.testing:
+            self.vpn.start()
         self.is_running = True
 #         self.station.flow.output_process =lambda sock,addr,session: self.proxy.set_peersock(sock)
 #         self.proxy.connect_peer = lambda session_id: self.station.flow.connectRemote_DL(self.proxy_node,
@@ -240,6 +241,9 @@ class PPVPN(PPNetApp):
                 
     def _connect(self,sip):
         ip = ip_stoi(sip)
+        if not (self.ip_range["start"] < ip < self.ip_range["end"]):
+            logging.debug("not valid vlan ip")
+            return 
         if ip not in self.vlan_table:
             node_id = self.wait_arp_req(ip)
         else:
@@ -304,7 +308,7 @@ class PPVPN(PPNetApp):
             self.station.send_ppmsg(self.station.peers[self.vlan_table[0]],ppmsg)
 
     def _setNodeIp(self,node_id,ip):
-        for tip in self.vlan_table.keys():
+        for tip in list(self.vlan_table.keys()):
             ipnode = self.vlan_table[tip]
             if ipnode[0] == node_id or int(time.time())-ipnode[1]>24*60*60:
                 self.vlan_table.pop(tip)
@@ -325,8 +329,7 @@ class PPVPN(PPNetApp):
             if result_ip == ip:
                 if ip in self.vlan_table and self.vlan_table[ip][0]==node_id:
                     return
-                self._set_node_ip(node_id,ip)
-
+                self._setNodeIp(node_id,ip)
                 self._castARP(vpn_msg)
             else:#error
                 self.auth_res(node_id,result_ip)
@@ -362,6 +365,7 @@ class PPVPN(PPNetApp):
         logging.debug("get ip %s"%result_ip)
         if result_ip:
             self._castARP(PPVPN.VPNMessage(dictdata=dictdata))
+            self._setNodeIp(node_id,result_ip)            
         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):
@@ -487,9 +491,7 @@ class TestVPN(unittest.TestCase):
         if self.inited == 1:
             return
         self.fake_net = FakeNet()
-        set_debug(logging.DEBUG, "",
-                debug_filter=lambda record: record.filename =="pp_vpn.py",
-                  )
+
 
         self.nodes = {100: { "node_id": 100,"ip": "180.153.152.193", "port": 54330, "net_id":200,"secret": "",},
                  201: { "node_id": 201,"ip": "116.153.152.193", "port": 54330, "net_id":200,"secret": "",},
@@ -517,7 +519,10 @@ class TestVPN(unittest.TestCase):
         self.stationC.start()           
         
         self.vpnA = PPVPN(self.stationA,config={})   
-        self.vpnB = PPVPN(self.stationB,config={})                        
+        self.vpnB = PPVPN(self.stationB,config={})  
+        self.vpnA.testing = True
+        self.vpnA.ip = ip_stoi("192.168.33.10")
+        self.vpnB.testing = True                              
         self.inited = 1
         
     def quit(self):
@@ -528,7 +533,9 @@ class TestVPN(unittest.TestCase):
             self.inited = 0   
 
     def setUp(self):
-        set_debug(logging.DEBUG, "")
+        set_debug(logging.DEBUG, "",
+                debug_filter=lambda record: record.filename =="pp_vpn.py",
+                  )
         self.start()
         pass
 
@@ -537,8 +544,8 @@ class TestVPN(unittest.TestCase):
         self.quit()
         pass
 
+    @unittest.skip("command only")
     def testAuth(self):
-
         self.vpnA.start()
         self.vpnB.start()
         time.sleep(3)
@@ -546,13 +553,28 @@ class TestVPN(unittest.TestCase):
         self.assertTrue(self.vpnA.is_running==True,"test Auth")
         pass
     
-
+    def testARP(self):
+        self.vpnA.start()
+        self.vpnB.start()
+        time.sleep(1)
+        self.vpnA.ip = ip_stoi("192.168.33.10")
+#         self.vpnA.vlan_table[self.vpnB.ip]=()
+#         self.vpnA.start_vpn()
+        self.vpnB.ip = ip_stoi("192.168.33.12")
+#         self.vpnB.start_vpn()
+        self.vpnA.arp_req(self.vpnB.ip)
+        print(self.vpnA.vlan_table)
+        time.sleep(1)
+        print(self.vpnA.vlan_table,self.vpnB.ip)        
+        self.assertTrue(self.vpnA.vlan_table[self.vpnB.ip][0]==201,"test ARP")
+        pass
+    
+    @unittest.skip("command only")
     def testVPNServer(self):
         vpn = VPNBase("192.168.33.10","255.255.255.0")
         sock = prepare_socket(timeout=10,port=7070)
         sock.listen(10)
         count = 0
-
 
         try: #active the port
             sock1 = prepare_socket(timeout=2,port=7070)
@@ -579,6 +601,7 @@ class TestVPN(unittest.TestCase):
         vpn.quit()
         pass
 
+    @unittest.skip("command only")
     def testVPNClient(self):
         vpn = VPNBase("192.168.33.12","255.255.255.0")
 
