@@ -31,18 +31,56 @@ def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:
     if filename:
         logging.basicConfig(level=debug_level,
                 format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-                datefmt='%a, %d %b %Y %H:%M:%S',
+                datefmt='%Y/%m/%d %H:%M:%S',
+#                 datefmt='%a, %d %b %Y %H:%M:%S',
                 filename=filename,
                 filemode='w',
                 )
     else:
         logging.basicConfig(level=debug_level,
-                format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-                datefmt='%a, %d %b %Y %H:%M:%S',
+                format='%(asctime)s %(filename)s[%(lineno)d] %(levelname)s %(message)s',
+                datefmt='%Y/%m/%d %H:%M:%S',
                 handlers = [console,]
                 )
 
+def wait_available(datadict,item,times):
+    count  = 0
+    while count<times:
+        if item in datadict:
+            return datadict[item]
+        time.sleep(1)
+        count +=1        
+    return None
+
+def wait_result(item,result,times):
+    count  = 0
+    while count<times:
+        if item == result:
+            return item
+        time.sleep(1)
+        count +=1        
+    return item
+
+def do_wait(func,item,result,times):
+    count  = 0
+    while count<times:
+        if item == result:
+            return item
+        time.sleep(1)
+        count +=1 
+        func()       
+    return item
+
+def ip_stoi(ip):
+    return struct.unpack("I", socket.inet_aton(ip))[0]
+
+def ip_itos(ip):
+    return socket.inet_ntoa(struct.pack("I", ip))
+
+
 BroadCastId = 0xffffffff
+PublicNetId = 0xffffffff
+
 NAT_TYPE = {"Unknown":7, "Turnable":2, "Unturnable":5}
 NAT_STRING = {2:"Turnable", 7:"Unknown", 5:"Unturnable"}
 
@@ -56,8 +94,6 @@ class PPNode(object):
     '''
     def __init__(self, **kwargs):
         self.node_id = 0
-        self.net_id = 0
-        self.net_secret = ""
 
         self.ip ="0.0.0.0" 
         self.port = 0 
@@ -71,7 +107,7 @@ class PPNode(object):
         self.last_in = int(time.time())
         self.last_out = int(time.time()) - 200
         self.status = False  #  True = alive
-        self.turn_server = ""  # 针对非turn节点，其转接点        return self
+        self.turn_server = 0  # 针对非turn节点，其转接点        return self
         self.distance = 10
         self.last_beat_addr = (0,0)
 
@@ -111,8 +147,7 @@ class PPNode(object):
         return False
 
     def __str__(self):
-        net_id = self.net_id if "net_id" in self.__dir__() else ""
-        return "node: %d.%d addr:%s %s (d=%d t=%d) %s " % (net_id,self.node_id,
+        return "node: %d addr:%s %s (d=%d t=%d) %s " % (self.node_id,
                                                          "%s:%d"%self.external_addr,
                                                          NAT_STRING[self.nat_type], self.distance,self.turn_server,
                                                          "online" if self.status else "offline")
@@ -128,7 +163,7 @@ class PPNode(object):
     def dump_dict(self, detail=False):
         node_dict = {"node_id":self.node_id, "ip":self.external_addr[0], "port":self.external_addr[1],
                     "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
-                    "secret":self.secret,"net_id":self.net_id }
+                    "secret":self.secret, }
 
         if detail:
             node_dict.update({"status":self.status, "last_out":self.last_out,
@@ -157,8 +192,7 @@ class PPNode(object):
     def load_dict(self, nodedict):
         if "node_id" in nodedict:
             self.node_id = int(nodedict["node_id"])
-        if "net_id" in nodedict:
-            self.net_id = int(nodedict["net_id"])
+
         if "ip" in nodedict:
             self.ip,_ = self._load_addr(nodedict)
         if "port" in nodedict:
@@ -187,17 +221,6 @@ class PPNode(object):
             self.distance = int(nodedict["distance"])
         return self
     
-    def getToken(self,sequence):
-        if self.net_id==0xffffffff:
-            return b"\x00"*4
-        return b""*4
-    
-    def authenticate(self,ppmsg):
-        '''
-        to do and  authencation
-        '''
-        
-        return True
 
 PP_APPID = {
           "Auth":1,
@@ -221,8 +244,7 @@ PP_APPID = {
 class PPMessage(object):
     '''
     Frame：
-    net_id        4Bytes
-    net_token     4Bytes
+
     src_id   dst_id    sequence  needack+ttl    app_id  applen   appdata
     4byte    4byte   4byte        1b+000+4bit   2byte   2byte      applen
 
@@ -277,28 +299,25 @@ class PPMessage(object):
 
     def load(self, bindata):
         try:
-            result = struct.unpack("I4sIIHIBH", bindata[:28])
-            self.dict_data["net_id"] = result[0]
-            self.dict_data["net_token"] = result[1]        
-            self.dict_data["src_id"] = result[2]
-            self.dict_data["dst_id"] = result[3]
-            self.dict_data["app_id"] = result[4]
-            self.dict_data["sequence"] = result[5]
-            self.dict_data["ttl"] = result[6] &0x7
-            self.dict_data["need_ack"] = True if result[6]&0x80  else False
-            app_data_len = result[7]
-            self.bin_length = 28+app_data_len
-            self.dict_data["app_data"] = struct.unpack("%ds" % app_data_len, bindata[28:28+app_data_len])[0]
+            result = struct.unpack("IIHIBH", bindata[:20])
+    
+            self.dict_data["src_id"] = result[0]
+            self.dict_data["dst_id"] = result[1]
+            self.dict_data["app_id"] = result[2]
+            self.dict_data["sequence"] = result[3]
+            self.dict_data["ttl"] = result[4] &0x7
+            self.dict_data["need_ack"] = True if result[4]&0x80  else False
+            app_data_len = result[5]
+            self.bin_length = 20+app_data_len
+            self.dict_data["app_data"] = struct.unpack("%ds" % app_data_len, bindata[20:20+app_data_len])[0]
         except Exception as exp:
-            logging.debug("error when decode ppmessage (%d)%s \n%s" %(len(bindata),bindata[:28],exp))
+            logging.debug("error when decode ppmessage (%d)%s \n%s" %(len(bindata),bindata[:20],exp))
         return self
 
     def dump(self):
-        print(self.dict_data,self.dict_data["ttl"]|(0x80 if self.dict_data["need_ack"] else 0))
+#         print(self.dict_data,self.dict_data["ttl"]|(0x80 if self.dict_data["need_ack"] else 0))
         app_data_len = len(self.dict_data["app_data"])
-        data = struct.pack("I4sIIHIBH%ds" % app_data_len,
-                           self.dict_data["net_id"],
-                           self.dict_data["net_token"],
+        data = struct.pack("IIHIBH%ds" % app_data_len,
                            self.dict_data["src_id"],
                            self.dict_data["dst_id"],
                             self.dict_data["app_id"],
@@ -307,7 +326,7 @@ class PPMessage(object):
                             app_data_len,
                             self.dict_data["app_data"],
                            )
-        self.bin_length = 28+app_data_len
+        self.bin_length = 20+app_data_len
         return data
 
     @staticmethod
@@ -543,7 +562,7 @@ class Receiver(PPApp):
             return
         try:
             ppmsg = PPMessage(bindata=data)
-            logging.debug("%d.%d receive %s (seq=%d)(ttl=%d) from %s to %s addr %s!" % (self.station.net_id,self.station.node_id,
+            logging.debug("%d receive %s (seq=%d)(ttl=%d) from %s to %s addr %s!" % (self.station.node_id,
                             PPMessage.app_string(ppmsg.get("app_id")), ppmsg.get("sequence"),ppmsg.get("ttl"),
                             ppmsg.get("src_id"), ppmsg.get("dst_id"), addr))
 #             logging.debug(ppmsg.dict_data)
@@ -554,26 +573,20 @@ class Receiver(PPApp):
 
     def process_msg(self, ppmsg, addr):
 
-        net_id = ppmsg.get("net_id")
-        if self.station.net_id:
-            if net_id == self.station.net_id :
-                if not self.station.authenticate(ppmsg):
-                    return  #discard authenticate failue 
-
         dst_id = ppmsg.get("dst_id")            
         if dst_id == self.station.node_id or dst_id == BroadCastId:
             sequence = ppmsg.get("sequence")
             src_id = ppmsg.get("src_id")
             app_id = ppmsg.get("app_id")
             # 回响应包
-            if  ppmsg.get("ttl") & 0x80 and not dst_id == BroadCastId:
+            if  ppmsg.get("need_ack")  and not dst_id == BroadCastId:
                 self.station.ackor.send_ack(src_id,sequence,addr)
 
-            if (net_id,src_id,sequence) in self.in_queue:
+            if (src_id,sequence) in self.in_queue:
                     logging.debug("duplication message! %s"%self.in_queue)
                     return
             else:
-                self.in_queue.append((net_id,src_id,sequence))
+                self.in_queue.append((src_id,sequence))
                 self.in_queue.pop(0)
                 self.station.byte_in += len(ppmsg.get("app_data")) + 20
                 self.station.packet_in += 1
@@ -586,7 +599,7 @@ class Receiver(PPApp):
         if self.callback:
             self.callback(ppmsg,addr)
         else:
-            logging.warning("%d.%d no process seting for %s"%(self.station.net_id,self.station.node_id,ppmsg.get("app_id")))
+            logging.warning("%d no process seting for %s"%(self.station.node_id,ppmsg.get("app_id")))
 
 
 class Ackor(PPApp):
@@ -635,7 +648,7 @@ class Ackor(PPApp):
         src_id = msg.get("src_id")
         sequence = ackmsg.get("sequence")
         if (src_id,sequence) in self.ack_queue:
-            logging.debug("%d.%d receive ack info %d sequence %d"%(self.station.net_id,self.station.node_id,src_id,sequence))
+            logging.debug("%d receive ack info %d sequence %d"%(self.station.node_id,src_id,sequence))
             del self.ack_queue[(src_id,sequence)]
             if self.callback:
                 self.callback(src_id,sequence, True)
@@ -649,11 +662,13 @@ class Ackor(PPApp):
     def send_ack(self,peer_id,sequence,addr):
         self.station.tx_sequence += 1
         sequence1 = self.station.tx_sequence
-        dictdata={"net_id":self.station.net_id,"src_id":self.station.node_id,"dst_id":peer_id,
+        dictdata={
+                  "src_id":self.station.node_id,"dst_id":peer_id,
                   "app_data":Ackor.AckMessage(dictdata={"sequence":sequence}).dump(),
                   "app_id":PP_APPID["Ack"],"sequence":sequence1}
 
         pp_ack_msg = PPMessage(dictdata=dictdata)
+
         self.station._send(addr,pp_ack_msg.dump())
 
     def check_ack(self):
@@ -720,7 +735,7 @@ class PPLinker(PPNode):
                     "node_port":54320,
                     "node_secret":"password",
                     "nodes": [(id,ip,port,type)..] or  "nodes_db":nodes.pkl
-                    "net_id":"public",
+                    
                     "net_secret":"password"}
 
     linker = PPLinker(config = config_dict，msg_callback=None,ack_callback=None)
@@ -766,7 +781,7 @@ class PPLinker(PPNode):
 
         self.sockfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sockfd.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        logging.info(" %d.%d Socket bind to %s:%d" %(self.net_id,self.node_id,self.ip,self.port))
+        logging.info(" %d Socket bind to %s:%d" %(self.node_id,self.ip,self.port))
         try:
             self.sockfd.bind((self.ip, self.port))
         except:
@@ -775,10 +790,10 @@ class PPLinker(PPNode):
             self.nat_type = NAT_TYPE["Unknown"]
         self.quitting = False
 
-        logging.info("%d.%d Linker is runing!"%(self.net_id,self.node_id,))
+        logging.info("%d Linker is runing!"%(self.node_id,))
         for service in self.services:
             self.services[service].start()
-            logging.info("%d.%d %s is start."%(self.net_id,self.node_id,service))
+            logging.info("%d %s is start."%(self.node_id,service))
 
         self.not_runing = 0
         start_new_thread(self.check_runing, ())
@@ -786,11 +801,11 @@ class PPLinker(PPNode):
         return self
 
     def quit(self):
-        logging.info("%d.%d Linker is quitting..."%(self.net_id,self.node_id,))
+        logging.info("%d Linker is quitting..."%(self.node_id,))
         self.quitting = True
         for service in self.services:
             self.services[service].quit()
-            logging.info("%d.%d %s is quit."%(self.net_id,self.node_id,service))
+            logging.info("%d %s is quit."%(self.node_id,service))
                     
 #         self.receiver.quit()
 #         self.ackor.quit()
@@ -834,8 +849,8 @@ class PPLinker(PPNode):
 
     def publish(self):
         # send self info to web directory
-        if  self.nat_type== NAT_TYPE["Turnable"] and self.net_id==0xffffffff:  # ChangedAddressError:  #must
-            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1], "net_id":self.net_id, "node_id":self.node_id}
+        if  self.nat_type== NAT_TYPE["Turnable"] :  # ChangedAddressError:  #must
+            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1],  "node_id":self.node_id}
             requests.post("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
         pass
 
@@ -851,7 +866,7 @@ class PPLinker(PPNode):
             ppmsg.set("sequence", sequence)
         
         sequence = ppmsg.get("sequence")
-        ppmsg.set("net_token",self.getToken(sequence))
+
         addr = (peer.ip,peer.port)
         ppmsg.set("need_ack", need_ack)
         bin_msg = ppmsg.dump()
@@ -863,7 +878,7 @@ class PPLinker(PPNode):
         peer.byte_out += len(ppmsg.get("app_data")) + 20
         peer.packet_out += 1
         peer.last_out = int(time.time())
-        logging.debug("%d.%d send %s(seq=%d)(ttl=%d) to %s on (%s,%s,%s)." % (self.net_id,self.node_id,
+        logging.debug("%d send %s(seq=%d)(ttl=%d) to %s on (%s,%s,%s)." % (self.node_id,
             PPMessage.app_string(ppmsg.get("app_id")), sequence, ppmsg.get("ttl"),
             peer.node_id, peer.ip, peer.port,NAT_STRING[peer.nat_type]))
         return sequence
@@ -1060,12 +1075,16 @@ class LinkerTest(unittest.TestCase):
     inited = 0
 
     def start(self):
-        self.fake_net = FakeNet()
         set_debug(logging.DEBUG, "")
 
-        self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
-        self.stationB = self.fake_net.fake(PPLinker(config={"node_id":201, "node_ip":"116.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
-        self.stationC = self.fake_net.fake(PPLinker(config={"node_id":202, "node_ip":"116.153.152.193", "node_port":54320, "nat_type":NAT_TYPE["Turnable"]}))
+        self.stationA = PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}) 
+        self.stationB = PPLinker(config={"node_id":201, "node_ip":"116.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]})
+        self.stationC = PPLinker(config={"node_id":202, "node_ip":"116.153.152.193", "node_port":54320, "nat_type":NAT_TYPE["Turnable"]})
+
+        self.fake_net = FakeNet()
+        self.fake_net.fake(self.stationA)
+        self.fake_net.fake(self.stationB)
+        self.fake_net.fake(self.stationC)     
         self.inited = 1
 
     def setUp(self):
@@ -1077,7 +1096,7 @@ class LinkerTest(unittest.TestCase):
         pass
 
     def testPPMessage(self):
-        dictdata={"net_id":0,"net_token":b"\x00"*4,"src_id":12,"dst_id":13,
+        dictdata={"src_id":12,"dst_id":13,
                     "app_data":b"app_data",
                     "app_id":7}
         ppmsg = PPMessage(dictdata=dictdata)
@@ -1094,13 +1113,13 @@ class LinkerTest(unittest.TestCase):
         self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]},
                                                                                 ack_callback=self.ack_callback ))
         self.ackResult = False
-        dictdataA={"net_id":1,"src_id":100,"dst_id":201,
+        dictdataA={"src_id":100,"dst_id":201,
                     "app_data":b"app_data",
                     "app_id":7}
         self.stationA.start()
         self.stationB.start()
         # to have a hole
-        dictdataB={"net_id":1,"src_id":201,"dst_id":202,
+        dictdataB={"src_id":201,"dst_id":202,
                     "app_data":b"app_data",
                     "app_id":7}
         self.stationB.send_ppmsg(self.stationC, PPMessage(dictdata=dictdataB))

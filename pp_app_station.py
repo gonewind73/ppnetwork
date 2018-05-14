@@ -6,7 +6,7 @@ Created on 2018年4月10日
 '''
 import unittest
 from pp_control import PPStation
-from pp_datalayer import  DataLayer
+from pp_flow import  DataLayer
 import logging
 from pp_link import set_debug
 import yaml
@@ -18,8 +18,8 @@ import optparse
 class PPAppStation(PPStation):
     def __init__(self,config):
         super().__init__(config) 
-        self.datalayer = DataLayer(station=self,data_port=config.get("data_port",7070))
-        self.services.update({"datalayer":self.datalayer})
+        self.flow = DataLayer(station=self,data_port=config.get("data_port",7070))
+        self.services.update({"flow":self.flow})
         
         if "services" in self.config:
             service_config = self.config["services"]
@@ -100,6 +100,6 @@ if __name__ == "__main__":
         config = yaml.load(open(opt.config_file))
         set_debug(config.get("DebugLevel", logging.WARNING),
                     config.get("DebugFile", ""))
-    #             config.get("DebugFile", ""),filter=lambda record: record.filename =="pp_datalayer.py" or record.filename =="pp_vpn.py")
+    #             config.get("DebugFile", ""),filter=lambda record: record.filename =="pp_flow.py" or record.filename =="pp_vpn.py")
         main(config=config)
     
