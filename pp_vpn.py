@@ -571,9 +571,8 @@ class TestVPN(unittest.TestCase):
                 continue
             else:
                 print("accept from",conn.getpeername())
-                peerip= conn.getpeername()[0]
                 vpn.start()
-                vpn.set_peersock(peerip,conn)
+                vpn.set_peersock("192.168.33.12",conn)
                 break
 
         input("any key to quit!")
@@ -602,7 +601,7 @@ class TestVPN(unittest.TestCase):
             else:
                 time.sleep(3)
                 vpn.start()
-                vpn.set_peersock(server,sock)
+                vpn.set_peersock("192.168.33.10",sock)
                 break
 
         input("any key to quit!")
