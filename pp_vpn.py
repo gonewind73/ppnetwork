@@ -18,7 +18,7 @@ from pp_flow import prepare_socket
 import random
 import hashlib
 import struct
-from Cython.Build.Tests.TestIpythonMagic import ip
+
 
 '''
 vpn config:
