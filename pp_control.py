@@ -627,7 +627,7 @@ class Beater(PPNetApp):
 
         def __init__(self, **kwargs):
             tags_id = {
-              "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,
+              "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,"req_id":6,
               "bin_node":0x10, "bin_peer":0x11,"bin_path":0x15,
               "net_id":0x12,"timestamp":0x13,"error_info":0x14}
             parameter_type = {0x10:"s",0x11:"s",0x15:"s",
@@ -806,6 +806,9 @@ class Beater(PPNetApp):
             self.path_process(command,parameters)
             return
         
+        if command in ("req_id",):
+            self.res_id(msg,addr)  
+        
         if command in ("beat_req","beat_res"):
             if parameters["peer"]["node_id"] == self.station.node_id:
                 self.set_self_info(parameters["peer"],addr,distance)            
@@ -837,6 +840,32 @@ class Beater(PPNetApp):
         else:
             return False            
         
+    def res_id(self,ppmsg,addr):
+        btmsg = Beater.BeatMessage(bindata=ppmsg.get("app_data"))
+        distance = 7 - ppmsg.get("ttl")     
+        command = btmsg.get("command")
+        parameters = btmsg.get("parameters")
+        node_info = parameters["node"]
+        node_id = node_info["node_id"]
+        
+        if distance>1  and not node_id == 0:
+            return
+        
+        peer_info = {"node_id":self.node_id, "ip":self.external_addr[0], "port":self.external_addr[1],
+                    "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
+                    "secret":self.secret, }
+        beat_dictdata = {"command":"beat_res",
+                         "parameters":{
+                             "node":self.station.beat_info(),
+                             "peer": peer_info,
+                             "net_id":self.station.net_id,
+                             "timestamp":int(time.time())
+                             }}
+        beat_msg = Beater.BeatMessage(dictdata=beat_dictdata)
+        ppmsg = 
+        self._send(addr, beat_msg, always=False)
+        
+                
     def set_self_info(self,peer,addr,distance=1):
         if not peer["node_id"] == self.station.node_id \
             or peer["ip"] == "0.0.0.0" or self._is_private_ip(peer["ip"]):

@@ -17,37 +17,6 @@ import random
 import select
 import sys
 
-
-# '''define statics'''
-# SOCKS_VER5 = b'\x05'
-# METHOD_NO_AUTHENTICATION_REQUIRED = b'\x00'
-# METHOD_GSSAPI = b'\x01'
-# METHOD_USERNAME_PASSWORD = b'\x02'
-# METHOD_IANA_ASSIGNED_MIN = b'\x03'
-# METHOD_IANA_ASSIGNED_MAX = b'\x7F'
-# METHOD_RESERVED_FOR_PRIVATE_METHODS_MIN = b'\x80'
-# METHOD_RESERVED_FOR_PRIVATE_METHODS_MAX = b'\xFE'
-# METHOD_NO_ACCEPTABLE_METHODS = b'\xFF'
-#  
-# CMD_CONNECT = b'\x01'
-# CMD_BIND = b'\x02'
-# CMD_UDP = b'\x03'
-#  
-# RSV = b'\x00'
-# ATYP_IPV4 = 1
-# ATYP_DOMAINNAME = 3
-# ATYP_IPV6 = 4
-#  
-# REP_succeeded = b'\x00'
-# REP_general_SOCKS_server_failure = b'\x01'
-# REP_connection_not_allowed_by_ruleset = b'\x02'
-# REP_Network_unreachable = b'\x03'
-# REP_Host_unreachable = b'\x04'
-# REP_Connection_refused = b'\x05'
-# REP_TTL_expired = b'\x06'
-# REP_Command_not_supported = b'\x07'
-# REP_Address_type_not_supported = b'\x08'
-
 def prepare_socket(timeout=10,ip="0.0.0.0",port=0):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -59,7 +28,7 @@ def prepare_socket(timeout=10,ip="0.0.0.0",port=0):
         sock.bind((ip,port))
     return sock
 
-class DataLayer(PPNetApp):
+class Flow(PPNetApp):
     '''
     if is a process node,should define out_process(client_sock,client_addr,session) 
     self.output_process,(client_sock,client_addr,session)
@@ -102,8 +71,6 @@ class DataLayer(PPNetApp):
         self.input_process = None
         self.output_process = None
         self.send_in_minute = False   # if send packet will set the send_in_minut true, it will clear by timer
-        
-    
     
     def start(self):
         super().start()        
@@ -226,7 +193,7 @@ class DataLayer(PPNetApp):
             logging.debug("receive data(%d) %s"%(len(data),data))
             if len(data)<20:
                 return None
-            info = {"ip":Beater.BeatMessageV2.unpackip(data[0:4]),
+            info = {"ip":Beater.BeatMessage.unpackip(data[0:4]),
                     "port":struct.unpack("I",data[4:8])[0],
                     "session_src":struct.unpack("I",data[8:12])[0],
                     "session_dst":struct.unpack("I",data[12:16])[0],
@@ -289,7 +256,7 @@ class DataLayer(PPNetApp):
                       "session_dst":session[1],
                       "session_id":session[2]}}
         logging.debug(dictdata)
-        self.send_msg(peer_id, DataLayer.DataMessage(dictdata=dictdata))
+        self.send_msg(peer_id, Flow.DataMessage(dictdata=dictdata))
         
         return
         
@@ -516,9 +483,9 @@ class Test(unittest.TestCase):
         self.assertEqual(s.send_size, 10, "test session")
 
         
-    def testDataLayer(self):
-        self.client = DataLayer(self.stationA,data_port=7200)
-        self.server = DataLayer(self.stationB,data_port=7300)
+    def testFlow(self):
+        self.client = Flow(self.stationA,data_port=7200)
+        self.server = Flow(self.stationB,data_port=7300)
         processes = {100:self.client.process,
                      200:self.server.process}
         self.stationA.set_process(processes)

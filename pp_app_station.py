@@ -6,7 +6,7 @@ Created on 2018年4月10日
 '''
 import unittest
 from pp_control import PPStation
-from pp_flow import  DataLayer
+from pp_flow import  DataLayer, Flow
 import logging
 from pp_link import set_debug
 import yaml
@@ -18,7 +18,7 @@ import optparse
 class PPAppStation(PPStation):
     def __init__(self,config):
         super().__init__(config) 
-        self.flow = DataLayer(station=self,data_port=config.get("data_port",7070))
+        self.flow = Flow(station=self,data_port=config.get("data_port",7070))
         self.services.update({"flow":self.flow})
         
         if "services" in self.config:

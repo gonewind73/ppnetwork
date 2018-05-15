@@ -14,7 +14,7 @@ import logging
 import socket
 import sys
 import time
-from pp_flow import prepare_socket
+from pp_flow import prepare_socket, Flow
 import random
 import hashlib
 import struct
@@ -399,7 +399,7 @@ class PPVPN(PPNetApp):
             return 0
                
     def connect_req(self,session,ip):
-        dictdata = {"command":"vpn_req",
+        dictdata = {"command":"connect_req",
                     "parameters":{
                       "session_src":session[0],
                       "session_dst":session[1],
@@ -410,7 +410,7 @@ class PPVPN(PPNetApp):
         return
 
     def connect_res(self,session,ip):
-        dictdata = {"command":"vpn_res",
+        dictdata = {"command":"connect_res",
                     "parameters":{
                       "session_src":session[0],
                       "session_dst":session[1],
@@ -506,7 +506,11 @@ class TestVPN(unittest.TestCase):
         self.stationA = PPStation(configA) 
         self.stationB = PPStation(configB)
         self.stationC = PPStation(configC)
-
+        self.stationA.flow = Flow(station=self.stationA,data_port=7070)
+        self.stationA.services.update({"flow":self.stationA.flow})
+        self.stationB.flow = Flow(station=self.stationB,data_port=7071)
+        self.stationB.services.update({"flow":self.stationB.flow})
+        
         self.fake_net = FakeNet()
         self.fake_net.fake(self.stationA)
         self.fake_net.fake(self.stationB)
@@ -534,7 +538,7 @@ class TestVPN(unittest.TestCase):
 
     def setUp(self):
         set_debug(logging.DEBUG, "",
-                debug_filter=lambda record: record.filename =="pp_vpn.py",
+                debug_filter=lambda record: record.filename =="pp_vpn.py" or record.filename =="pp_flow.py"  ,
                   )
         self.start()
         pass
@@ -553,6 +557,7 @@ class TestVPN(unittest.TestCase):
         self.assertTrue(self.vpnA.is_running==True,"test Auth")
         pass
     
+    @unittest.skip("command only")
     def testARP(self):
         self.vpnA.start()
         self.vpnB.start()
@@ -567,6 +572,20 @@ class TestVPN(unittest.TestCase):
         time.sleep(1)
         print(self.vpnA.vlan_table,self.vpnB.ip)        
         self.assertTrue(self.vpnA.vlan_table[self.vpnB.ip][0]==201,"test ARP")
+        pass
+    
+    def testConnect(self):
+        self.vpnA.start()
+        self.vpnB.start()
+        time.sleep(1)
+        self.vpnA.ip = ip_stoi("192.168.33.10")
+        self.vpnB.ip = ip_stoi("192.168.33.12")
+        self.vpnA.arp_req(self.vpnB.ip)
+        print(self.vpnA.vlan_table)
+        time.sleep(1)
+        print(self.vpnA.vlan_table,self.vpnB.ip)     
+        self.vpnA._connect("192.168.33.12")   
+        self.assertTrue(not self.vpnA.vpn.peer_sock[self.vpnB.ip]==None,"test connect")
         pass
     
     @unittest.skip("command only")
