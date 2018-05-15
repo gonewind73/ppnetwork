@@ -24,11 +24,7 @@ class PPAppStation(PPStation):
         if "services" in self.config:
             service_config = self.config["services"]
             if "vpn" in service_config:
-                self.vpn = PPVPN(station = self,
-                                 peer = self.config.get("vpn_peer",0),
-                                 ip = self.config.get("vpn_ip",r"192.168.33.1"),
-                                 mask = self.config.get("vpn_mask",r"255.255.255.0"),
-                                 ) 
+                self.vpn = PPVPN(station = self,  config = config,  ) 
                 self.services.update({"vpn":self.vpn})                
 #                 
     def run_command(self, command_string):
