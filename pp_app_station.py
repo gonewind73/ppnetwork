@@ -6,7 +6,7 @@ Created on 2018年4月10日
 '''
 import unittest
 from pp_control import PPStation
-from pp_flow import  DataLayer, Flow
+from pp_flow import   Flow
 import logging
 from pp_link import set_debug
 import yaml
