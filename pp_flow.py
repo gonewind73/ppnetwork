@@ -131,30 +131,19 @@ class Flow(PPNetApp):
             logging.exception("beat null error")
             pass   
 
-    def get_self_addr(self):
-        temp_config = self.station.config.copy()
-        temp_config.update({"node_port":self.data_port,"node_id":BroadCastId-1})
-        temp_station=PPStation(config = temp_config)
-        temp_station.start()
-        try_count = 0
-        while not temp_station.status and try_count<10:
-            time.sleep(1)
-            try_count += 1
-        if temp_station.status:
-            self.external_addr = (temp_station.ip,temp_station.port)
-            self.local_addr = temp_station.local_addr
+    def get_self_addr(self,):
+        local_addr,external_addr = self.station.get_addr(self.data_port)
+        if external_addr:
+            self.external_addr = external_addr
+            self.local_addr = local_addr
             logging.info("get self external_addr %s:%d"%self.external_addr)
-            temp_station.quit()
         else:
-            temp_station.quit()
             if self.station.status and self.station.nat_type==NAT_TYPE["Turnable"]:
                 self.external_addr = (self.station.ip,self.data_port)
                 self.local_addr = (self.station.local_addr[0],self.data_port)
                 logging.info("get self external_addr %s:%d by guess"%self.external_addr)
             else:
                 logging.error("can't get external address,quit")                
-#                 self.quit()
-#                 self.station.quit()
             return                      
 
     def listen(self,):
@@ -444,19 +433,26 @@ class Test(unittest.TestCase):
 
     def setUp(self):
         set_debug(logging.DEBUG, "")
-        self.stationA = FakeAppNet(node_id=100)
-        self.stationB = FakeAppNet(node_id=200)
+        self.nodes = {100: { "node_id": 100,"ip": "180.153.152.193", "port": 54330,"secret": "",},
+             201: { "node_id": 201,"ip": "116.153.152.193", "port": 54330, "secret": "",},
+             202:  { "node_id": 202,"ip": "116.153.152.193", "port": 54320,"secret": "",}}
+        config={"node_ip":"180.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"],
+                "nodes":self.nodes}
+        config.update({'node_id':100})
+        self.stationA = FakeAppNet(config)
+        config.update({'node_id':200})
+        self.stationB = FakeAppNet(config)
         
-        processes = {100:self.client.process,
-                     200:self.server.process}
-        self.stationA.set_process(processes)
-        self.stationB.set_process(processes)           
+#         processes = {100:self.stationB.process,
+#                      200:self.stationA.process}
+#         self.stationA.set_process(processes)
+#         self.stationB.set_process(processes)           
         pass
 
     def tearDown(self):
 
         pass
-    def testSession(self):
+    def TtestSession(self):
         receive_buffer = ""
         send_buffer = ""
         def receive_process(session,data):

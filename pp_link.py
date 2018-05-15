@@ -148,7 +148,7 @@ class PPNode(object):
 
     def __str__(self):
         return "node: %d addr:%s %s (d=%d t=%d) %s " % (self.node_id,
-                                                         "%s:%d"%self.external_addr,
+                                                         "%s:%d"%(self.ip,self.port),
                                                          NAT_STRING[self.nat_type], self.distance,self.turn_server,
                                                          "online" if self.status else "offline")
 
@@ -161,7 +161,7 @@ class PPNode(object):
             self.distance = 10
 
     def dump_dict(self, detail=False):
-        node_dict = {"node_id":self.node_id, "ip":self.external_addr[0], "port":self.external_addr[1],
+        node_dict = {"node_id":self.node_id, "ip":self.ip, "port":self.port,
                     "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
                     "secret":self.secret, }
 
@@ -216,7 +216,7 @@ class PPNode(object):
         if "turn_server" in nodedict:
             self.turn_server = nodedict["turn_server"]
         if "beat_interval" in nodedict:
-            self.beat_interval = int(nodedict["beat_interval"])
+            self.beat_interval = nodedict["beat_interval"]
         if "distance" in nodedict:
             self.distance = int(nodedict["distance"])
         return self
@@ -899,7 +899,7 @@ class PPLinker(PPNode):
             self.not_runing = 0
             return data, addr
         except (socket.timeout, OSError) as exps:
-            print(exps)
+            logging.debug(exps)
             return None, None
 
     def support_commands(self):
@@ -925,7 +925,7 @@ def main(config):
             station.run_command(s)
             print("\n%d>"%station.node_id,end="")
         except Exception as exp:
-            print(exp.__str__())
+            logging.debug(exp.__str__())
         if not station.quitting:
             s=input()
 
@@ -1023,32 +1023,25 @@ class FakeNet(object):
             self.buffer[addr] = []
 
         self.buffer[addr].append(((data, outaddr), int(time.time())))
+#         logging.debug("send %s data %s on %s"%("%s:%d"%addr,data[:2],"%s:%d"%outaddr))
 #         print(self.buffer)
 
     def receive(self, node_id=0, nat=None):
         '''
         self.stationA._receive = lambda : self.fake_net.receive(100)
         '''
-#         time.sleep(1)
-
         dst_addrs = nat.inaddrs()
-#         print(nat.ip,dst_addrs,)
         for dst_addr in list(dst_addrs.keys()):
-#             print("buffer",dst_addr,self.buffer.keys(),dst_addr in self.buffer)
-
             if dst_addr in self.buffer and self.buffer[dst_addr]:
-#                 print("enter receive")
-#                 print("receive:", self.buffer[dst_addr][0][0])
+#                 logging.debug("receive:%s %s"%self.buffer[dst_addr][0][0])
                 try:
                     data, addr = self.buffer[dst_addr].pop(0)[0]
                     if addr == dst_addrs[dst_addr] or dst_addrs[dst_addr] == dst_addr:
-
-    #                 if not nat.in_(addr[0],addr[1]) ==(None,None):
                         return data, addr
                     else:
                         print("drop packet for can't in.")
                 except Exception as exp:
-                    print(exp)
+                    logging.debug(exp)
                     return None,None
         return None, None
 
@@ -1065,7 +1058,7 @@ class FakeNet(object):
 
     def fake(self,station):
         nat = NAT(station.ip,station.port,station.nat_type)
-#         print(station.ip,station.port,station.nat_type)
+        logging.info("fake %d network %s %d %d"%(station.node_id,station.ip,station.port,station.nat_type))
         station._send = lambda addr,data: self.send(addr,data,nat)
         station._receive = lambda : self.receive(station.node_id,nat)
         return station

@@ -627,7 +627,7 @@ class Beater(PPNetApp):
 
         def __init__(self, **kwargs):
             tags_id = {
-              "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,"req_id":6,
+              "beat_req":1,"beat_res":2,"beat_set":3,"offline":4,"find_node":5,"req_id":6,"res_id":7,
               "bin_node":0x10, "bin_peer":0x11,"bin_path":0x15,
               "net_id":0x12,"timestamp":0x13,"error_info":0x14}
             parameter_type = {0x10:"s",0x11:"s",0x15:"s",
@@ -707,6 +707,7 @@ class Beater(PPNetApp):
         super().__init__(station,PP_APPID["Beat"],callback)
         self.beat_count = 0
         self.beat_interval = 1        
+        self.time_scale = 1
     
     def start(self):
         super().start()
@@ -738,16 +739,24 @@ class Beater(PPNetApp):
             
         self.beat_count += 1 
         if not self.station.quitting:    
-            self.timer = threading.Timer(60 * self.beat_interval, self.beat)
+            self.timer = threading.Timer(60 * self.beat_interval*self.time_scale, self.beat)
             self.timer.start()
             self.no_beat = 0
             pass     
+    
+    def _direct_send(self,addr,dst_id,btmsg):
+        msg = PPMessage(dictdata={"src_id":self.station.node_id,
+                                  "dst_id":dst_id,
+                                  "app_data":btmsg.dump(),
+                                  "app_id":PP_APPID["Beat"],
+                                  "sequence":0xffffffff})
+        self.station._send(addr,msg.dump())
         
     def send_beat(self, peerid, beat_cmd="beat_req", is_try=False):
         
         now = time.time()
         if peerid not in self.station.peers:
-            logging.warning("can't find %d,please try to find it first." % peerid)
+            logging.warning("%d can't find %d,please try to find it first." %(self.station.node_id, peerid))
             return False
         
         peer = self.station.peers[peerid]
@@ -770,7 +779,7 @@ class Beater(PPNetApp):
             self.send_msg(BroadCastId, beat_msg, always=False)
         else:
             if now - peer.last_out > 10 or beat_cmd == "beat_res" or is_try:
-                logging.debug("beat_msg %s"%beat_msg.dict_data)
+#                 logging.debug("beat_msg %s"%beat_msg.dict_data)
                 self.send_msg(peer.node_id, beat_msg, always=True)
                 peer.last_out = int(now)
             if not peer.status and not is_try:
@@ -787,7 +796,7 @@ class Beater(PPNetApp):
         #node is beat_src  peer is self
         '''
         btmsg = Beater.BeatMessage(bindata=msg.get("app_data"))   
-        logging.debug("%d receive btmsg %s"%(self.station.node_id,btmsg.dict_data))
+        logging.debug("%d receive btmsg %s from %s"%(self.station.node_id,btmsg.dict_data,"%s:%d"%addr))
         
 #         net_id = btmsg.get("parameters")["net_id"]
 #         if not self.station.net_id == PublicNetId and not net_id in (self.station.net_id,PublicNetId):
@@ -807,7 +816,17 @@ class Beater(PPNetApp):
             return
         
         if command in ("req_id",):
-            self.res_id(msg,addr)  
+            node_id = self.set_peer_info(msg,addr) 
+            logging.debug("%d peer node_id %d"%(self.station.node_id,node_id))
+            self.res_id(node_id, addr)
+            
+        if command in ("res_id",):
+            self_info = parameters["peer"]
+            if not self.station.node_id:
+                self.station.node_id = self_info["node_id"]
+                self.station.ip = self_info["ip"]
+                self.station.port = self_info["port"]
+
         
         if command in ("beat_req","beat_res"):
             if parameters["peer"]["node_id"] == self.station.node_id:
@@ -825,12 +844,16 @@ class Beater(PPNetApp):
         self.station.sockfd.sendto(b"0",
                            (socket.inet_ntoa(struct.pack('I', socket.htonl(random.randint(1677721600, 1694498816)))),
                             random.randint(10000, 60000)))
-        logging.debug("beat null")   
+        logging.debug("%d beat null"%self.station.node_id)   
         
     def send_offline(self):
-        beat_dictdata = {"beat_cmd":_BEAT_CMD["offline"]}
-        beat_dictdata["node"] = self.station.beat_info()
-        beat_dictdata["peer"] = self.station.beat_info()
+        beat_dictdata = {"command":"offline",
+                         "parameters":{
+                                       "node":self.station.beat_info(),
+                                       "peer":self.station.beat_info()
+                                       }}
+#         beat_dictdata["node"] = 
+#         beat_dictdata["peer"] = self.station.beat_info()
         beat_msg = Beater.BeatMessage(dictdata=beat_dictdata)
         self.send_msg(BroadCastId, beat_msg, always=False)   
         
@@ -840,31 +863,22 @@ class Beater(PPNetApp):
         else:
             return False            
         
-    def res_id(self,ppmsg,addr):
-        btmsg = Beater.BeatMessage(bindata=ppmsg.get("app_data"))
-        distance = 7 - ppmsg.get("ttl")     
-        command = btmsg.get("command")
-        parameters = btmsg.get("parameters")
-        node_info = parameters["node"]
-        node_id = node_info["node_id"]
-        
-        if distance>1  and not node_id == 0:
-            return
-        
-        peer_info = {"node_id":self.node_id, "ip":self.external_addr[0], "port":self.external_addr[1],
-                    "nat_type":self.nat_type, "will_to_turn":self.will_to_turn,
-                    "secret":self.secret, }
-        beat_dictdata = {"command":"beat_res",
+    def req_id(self):
+        self.station.node_id = 0
+        for peer_id in self.station.peers:
+            self.send_beat(peer_id, beat_cmd="req_id", is_try=True)
+        return 
+
+    def res_id(self,node_id,addr):
+        beat_dictdata = {"command":"res_id",
                          "parameters":{
                              "node":self.station.beat_info(),
-                             "peer": peer_info,
+                             "peer":self.station.peers[node_id].beat_info(),
                              "net_id":self.station.net_id,
                              "timestamp":int(time.time())
                              }}
         beat_msg = Beater.BeatMessage(dictdata=beat_dictdata)
-        ppmsg = 
-        self._send(addr, beat_msg, always=False)
-        
+        self._direct_send(addr, 0, beat_msg)
                 
     def set_self_info(self,peer,addr,distance=1):
         if not peer["node_id"] == self.station.node_id \
@@ -883,7 +897,7 @@ class Beater(PPNetApp):
             if not nat_type == NAT_TYPE["Unknown"]:
                 self.station.nat_type = nat_type
                 self.station.distance = 1 
-            logging.info("set self nattype to %s from peer!" % NAT_STRING[self.station.nat_type])
+            logging.info("set self %d nattype to %s from peer!" %(self.station.node_id, NAT_STRING[self.station.nat_type]))
             self.station.status = True
             self.station.publish()
             self.station.last_beat_addr = addr
@@ -893,18 +907,21 @@ class Beater(PPNetApp):
                 if not self.station.last_beat_addr == addr:
                     self.station.nat_type = NAT_TYPE["Turnable"] 
                     self.station.distance = 1 
-                    logging.debug("set self nattype to %s for differen direct connect" % NAT_STRING[self.station.nat_type])
+                    logging.debug("set self %d nattype to %s for differen direct connect" %(self.station.node_id,
+                                                                                NAT_STRING[self.station.nat_type]))
                     self.station.last_beat_addr = addr
             else:
                 if self.station.ip == "0.0.0.0":
                     self.station.ip = peer["ip"]
                     self.station.port = peer["port"]
                     self.station.nat_type = peer["nat_type"]
-                    logging.info("set self info to %s from peer!" % NAT_STRING[self.station.nat_type])
+                    logging.info("set self %d info to %s from peer!" % (self.station.node_id,
+                                                            NAT_STRING[self.station.nat_type]))
                 else:
                     self.station.nat_type = NAT_TYPE["Unturnable"]
                     self.station.distance = 1 
-                    logging.debug("set self nattype to %s for not same ip port" % NAT_STRING[self.station.nat_type])
+                    logging.debug("set self %d nattype to %s for not same ip port" % (self.station.node_id,
+                                                                        NAT_STRING[self.station.nat_type]))
                     
 
 #     def set_peer_info(self,command,node_info,timestamp,addr,distance,parameters=None):
@@ -916,8 +933,13 @@ class Beater(PPNetApp):
         node_info = parameters["node"]
         node_id = node_info["node_id"]
         
-        if node_id == 0:
-            return 
+        if node_id == 0 :
+            if command == "req_id" and distance==1:
+                node_id = self.station.get_free_id()
+                node_info["node_id"] = node_id
+                logging.debug("%d set peer node_id %d"%(self.station.node_id,node_id))
+            else:
+                return 0
         if node_id not in self.station.peers:
             self.station.peers[node_id] = PPNode(node_id=node_id)
                             
@@ -931,7 +953,7 @@ class Beater(PPNetApp):
             peer.status = False
             peer.distance = 10
             logging.info("%s is offline." % node_id)
-            return
+            return 0
        
         #wrong id
         if peer.status  and not self._is_private_ip(peer.ip) \
@@ -940,20 +962,16 @@ class Beater(PPNetApp):
                           "net_id":self.station.net_id}
             
             btmsg = Beater.BeatMessage(dictdata={"command":"beat_res",
-                                                   "parameters":parameters1 })        
-            msg = PPMessage(dictdata={"src_id":self.station.node_id,
-                                      "dst_id":node_info["node_id"],
-                                      "app_data":btmsg.dump(),
-                                      "app_id":PP_APPID["Beat"],
-                                      "sequence":0xffffffff})
-            self.station._send(addr,msg.dump())
-            return
+                                                   "parameters":parameters1 })  
+            self._direct_send(addr=addr, dst_id=node_info["node_id"], btmsg=btmsg)      
+
+            return 0
          
         if peer.distance < distance and peer.status:
-            return
+            return 0
         
         if not peer.status:
-            logging.info("%s is online." % node_id)
+            logging.info("%d: %s is online." %(self.station.node_id, node_id))
         
         peer.load_dict({"status":True, "beat_interval":1})
 
@@ -965,7 +983,7 @@ class Beater(PPNetApp):
                 self.send_beat(node_id, beat_cmd="beat_res", is_try=True)
         else:
             if distance < peer.distance :
-                turn_id = self.station.get_by_addr(addr)
+                turn_id = self.station.get_peer_by_addr(addr)
                 peer.load_dict({"ip":addr[0], "port":addr[1], "distance":distance,"turn_server":turn_id})
                 
             if  node_info["nat_type"] in ( NAT_TYPE["Turnable"],NAT_TYPE["Unknown"]) \
@@ -990,7 +1008,8 @@ class Beater(PPNetApp):
                 
             if peer.nat_type == NAT_TYPE["Unknown"]:
                 peer.nat_type = node_info["nat_type"]
-
+        return node_id
+    
     
 class NetManage(PPNetApp):
     '''
@@ -1182,7 +1201,7 @@ class PPStation(PPLinker):
 
     def start(self):
         super().start()
-        logging.info("Station is runing!")
+        logging.info("Station %d is runing!"%self.node_id)
         return self        
         
     def quit(self):
@@ -1193,6 +1212,34 @@ class PPStation(PPLinker):
 #             self.services[service].quit()
         self.dump_nodes()    
         super().quit()
+        
+    def get_free_id(self,check=False):
+        max_id = max(self.peers.keys())
+        '''
+        check is it available 
+        '''
+        logging.debug(max_id)
+        if not check:
+            return max_id+1
+        self.path_requester.request_path(max_id, 6, callback=None)
+        time.sleep(2)
+        if max_id not in self.peers:
+            return max_id+1
+        return self.get_free_id()
+    
+    def get_addr(self,port):
+        temp_config = self.config.copy()
+        temp_config.update({"node_port":port,"node_id":0})
+        temp_station=PPStation(config = temp_config)
+        temp_station.start()
+        try_count = 0
+        while not temp_station.node_id and try_count<10:
+            temp_station.beater.req_id()
+            time.sleep(1)
+            try_count += 1
+        if temp_station.node_id:
+            return temp_station.local_addr,(temp_station.ip,temp_station.port)
+        return None,None
         
     def get_peer_by_addr(self,addr):
         for peer_id in self.peers:
@@ -1367,14 +1414,14 @@ class PPStation(PPLinker):
             print("load peer online:")
             self.peers = self.get_peers_online()            
         logging.debug(self.db_file)
-        logging.debug(self.json_nodes())
+#         logging.debug(self.json_nodes())
 
     def _load_nodes_from_dict(self,nodes_dict):
         for node in nodes_dict:
             self.peers[node] = PPNode().load_dict(nodes_dict[node])
             self.peers[node].beat_interval = 1
-            if (self.net_id,self.node_id) in self.peers:
-                del self.peers[(self.net_id,self.node_id)]
+            if self.node_id in self.peers:
+                del self.peers[self.node_id]
                             
     def _load_nodes_from_file(self,filename):            
         try:
@@ -1382,9 +1429,6 @@ class PPStation(PPLinker):
                 nodes = json.loads(f.read())
                 nodes1 = {}
                 for node in nodes:
-#                     netnodeid = node.split(".")
-#                     print(netnodeid)
-#                     nodes1[(int(netnodeid[0]),int(netnodeid[1]))] = nodes[node]
                     nodes1[int(node)] = nodes[node]
                 self._load_nodes_from_dict(nodes1)
         except IOError:
@@ -1517,8 +1561,8 @@ class FakeAppNet(PPStation):
         self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
         self.stationA.start()
     '''
-    def __init__(self, node_id=0):
-        super().__init__(config={"node_id":node_id, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]})
+    def __init__(self, config):
+        super().__init__(config)
 #         self.node_id = node_id
 #         self.process_list = {}
         self.process = {}
@@ -1563,36 +1607,36 @@ class ControlTest(unittest.TestCase):
     inited = 0
     quiting = True
 
-    def start(self):
+    def init(self):
         if self.inited == 1:
             return
         self.fake_net = FakeNet()
-        set_debug(logging.DEBUG, "",
-                  )
-#                   debug_filter=lambda record: record.filename =="pp_control.py")
+        self.nodes = {100: { "node_id": 100,"ip": "180.153.152.193", "port": 54330,"secret": "",},
+                 201: { "node_id": 201,"ip": "116.153.152.193", "port": 54330, "secret": "",},
+                 202:  { "node_id": 202,"ip": "116.153.152.193", "port": 54320,"secret": "",}}
+        
+        config={"node_id":100, "node_ip":"180.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"],
+                                          "nodes":self.nodes,"ip":"0.0.0.0"}
+        self.stationA = self.initStation(config) 
+        config.update({"node_id":201, "node_ip":"116.153.152.193", "node_port":54330,"nat_type":NAT_TYPE["Unturnable"]})
+        self.stationB = self.initStation(config)
+        config.update({"node_id":202, "node_ip":"116.153.152.193", "node_port":54320})
+        self.stationC = self.initStation(config)
+        self.inited = 1
 
-
-        self.nodes = {100: { "node_id": 100,"ip": "180.153.152.193", "port": 54330, "net_id":PublicNetId,"secret": "",},
-                 201: { "node_id": 201,"ip": "116.153.152.193", "port": 54330, "net_id":200,"secret": "",},
-                 202:  { "node_id": 202,"ip": "116.153.152.193", "port": 54320, "net_id":200,"secret": "",}}
-        self.stationA = PPStation(config={"net_id":PublicNetId,"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"],
-                                          "nodes":self.nodes,"ip":"0.0.0.0"}) 
-        self.stationB = PPStation(config={"net_id":200,"node_id":201, "node_ip":"116.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"],
-                                          "nodes":self.nodes,"ip":"0.0.0.0"})
-        self.stationC = PPStation(config={"net_id":200,"node_id":202, "node_ip":"116.153.152.193", "node_port":54320, "nat_type":NAT_TYPE["Turnable"],
-                                          "nodes":self.nodes,"ip":"0.0.0.0"})
-
-        self.fake_net = FakeNet()
-        self.fake_net.fake(self.stationA)
-        self.fake_net.fake(self.stationB)
-        self.fake_net.fake(self.stationC)    
-#         self.stationA.beater.beat_interval = 0.1
-#         self.stationB.beater.beat_interval = 0.1
-#         self.stationB.beater.beat_interval = 0.1
+    def initStation(self,config):
+        station = PPStation(config) 
+        self.fake_net.fake(station)
+#         station.beater.time_scale = 0.01
+#         station.start()
+        return station
+    
+    def start(self):
+        if not self.inited:
+            self.init()
         self.stationA.start()
         self.stationB.start()
-        self.stationC.start()                                      
-        self.inited = 1
+        self.stationC.start()
         
     def quit(self):
         if self.inited:
@@ -1602,7 +1646,9 @@ class ControlTest(unittest.TestCase):
             self.inited = 0         
 
     def setUp(self):
-
+        set_debug(logging.DEBUG, "",
+#                 debug_filter=lambda record: record.filename =="pp_control.py"
+                  )
         pass
 
     def tearDown(self):
@@ -1643,14 +1689,15 @@ class ControlTest(unittest.TestCase):
         self.assertEqual(dictdata["command"], btmsg2.dict_data["command"], "test beatmessage")
         self.assertEqual(dictdata["parameters"]["net_id"], btmsg2.dict_data["parameters"]["net_id"], "test beatmessage")
         self.assertEqual(dictdata["parameters"]["timestamp"], btmsg2.dict_data["parameters"]["timestamp"], "test beatmessage")
-       
-    def Ttest_Beat(self):
+
+    @unittest.skip("command only")       
+    def test_Beat(self):
 
         self.start()
         self.stationA.get_all_nodes(delay=0)
         self.stationB.get_all_nodes(delay=0)
         self.stationC.get_all_nodes(delay=0)    
-        time.sleep(7)
+        time.sleep(10)
         self.assertTrue(self.stationA.status, "Station A alive!")
         self.assertTrue(self.stationB.status, "Station B alive!")
         self.assertTrue(self.stationC.status, "Station C alive!")   
@@ -1681,6 +1728,23 @@ class ControlTest(unittest.TestCase):
         print("interal")
         time.sleep(2)
         self.quit()
+        
+    def test_getaddr(self):
+        self.init()
+        self.stationA.start()
+        print("start get addr")
+        self.stationB.node_id = 0
+        self.stationB.start()
+        
+        try_count = 0
+        while not self.stationB.node_id and try_count<10:
+            self.stationB.beater.req_id()
+            time.sleep(1)
+            try_count += 1
+        print(self.stationB.node_id,self.stationB.ip,self.stationB.port)
+        self.assertTrue(self.stationB.node_id,"Test get addr ")  
+        self.stationA.quit()
+        self.stationB.quit()
         
     def text_callback(self, node_id, text):
         self.text = text
