@@ -15,7 +15,7 @@ node_port: 54320,
 node_nic: "无线网卡",
 DebugLevel: 10,
 #DebugFile: 'pplink.log',
-db_file: 'nodes.pkl',
+node_file: 'nodes.pkl',
 shell_users:{
     hgf: hgf,
     hjy: hjy,},
@@ -39,7 +39,7 @@ shell_users:{
 #        "shell": enable,
 #        "file": enable,
 #        "proxy": enable,
-#      "vpn": enable,
+      "vpn": enable,
         },         
     
  #vpn

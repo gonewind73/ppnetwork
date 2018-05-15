@@ -1359,10 +1359,12 @@ class PPStation(PPLinker):
         pass
         
     def set_ipport(self, peer_id, ip, port):
+        if peer_id not in self.peers:
+            self.peers[peer_id] = PPNode(node_id = peer_id)        
         self.peers[peer_id].ip = ip
         self.peers[peer_id].port = port
         self.peers[peer_id].nat_type = NAT_TYPE["Unturnable"]
-        self.peers[peer_id].distance = 10
+
         self.set_status(peer_id,False)
         self.beater.send_beat(peer_id, beat_cmd = "beat_req", is_try=True)            
                     
