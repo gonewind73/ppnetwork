@@ -465,7 +465,7 @@ class PPVPN(PPNetApp):
         cmd = command_string.split(" ")
         if cmd[0] in ["stat","vpn"]:
             if cmd[0] =="stat":
-                print("vpn %s ip: %s"%("is runing " if self.proxy and not self.proxy.quitting else "not run",
+                print("vpn %s ip: %s"%("is runing " if self.vpn and not self.vpn.quitting else "not run",
                                        ip_itos(self.ip)))
             if cmd[0] =="vpn" and len(cmd)>=2:
                 print("vpn ip set to %s "%(cmd[1]))
