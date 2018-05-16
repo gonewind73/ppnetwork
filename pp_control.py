@@ -796,7 +796,7 @@ class Beater(PPNetApp):
         #node is beat_src  peer is self
         '''
         btmsg = Beater.BeatMessage(bindata=msg.get("app_data"))   
-        logging.debug("%d receive btmsg %s from %s"%(self.station.node_id,btmsg.dict_data,"%s:%d"%addr))
+#         logging.debug("%d receive btmsg %s from %s"%(self.station.node_id,btmsg.dict_data,"%s:%d"%addr))
         
 #         net_id = btmsg.get("parameters")["net_id"]
 #         if not self.station.net_id == PublicNetId and not net_id in (self.station.net_id,PublicNetId):
@@ -879,6 +879,7 @@ class Beater(PPNetApp):
                              }}
         beat_msg = Beater.BeatMessage(dictdata=beat_dictdata)
         self._direct_send(addr, 0, beat_msg)
+        self.station.delete_peer(node_id)
                 
     def set_self_info(self,peer,addr,distance=1):
         if not peer["node_id"] == self.station.node_id \
@@ -1237,6 +1238,7 @@ class PPStation(PPLinker):
             temp_station.beater.req_id()
             time.sleep(1)
             try_count += 1
+        temp_station.quit()
         if temp_station.node_id:
             return temp_station.local_addr,(temp_station.ip,temp_station.port)
         return None,None
@@ -1357,6 +1359,10 @@ class PPStation(PPLinker):
                     self.byte_turn += len(ppmsg.get("app_data")) + 20
                     self.packet_turn += 1
         pass
+    
+    def delete_peer(self,peer_id):
+        if peer_id in self.peers:
+            self.peers.pop(peer_id)
         
     def set_ipport(self, peer_id, ip, port):
         if peer_id not in self.peers:
@@ -1419,6 +1425,7 @@ class PPStation(PPLinker):
 #         logging.debug(self.json_nodes())
 
     def _load_nodes_from_dict(self,nodes_dict):
+        logging.debug(nodes_dict)
         for node in nodes_dict:
             self.peers[node] = PPNode().load_dict(nodes_dict[node])
             self.peers[node].beat_interval = 1

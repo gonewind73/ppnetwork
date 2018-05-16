@@ -401,25 +401,25 @@ class Flow(PPNetApp):
     
     def run_command(self, command_string):
         cmd = command_string.split(" ")
-        if cmd[0] in ["stat","try","set","datalayer"]:
+        if cmd[0] in ["stat","try","set","flow"]:
             if cmd[0] =="stat":
-                print("datalayer listen on port %d  (%d) %s"%(self.data_port,
+                print("flow listen on port %d  (%d) %s"%(self.data_port,
                                                     self.count,
                                                     self.external_addr if self.external_addr else "None"))
             if cmd[0] =="try" and len(cmd)>=1:
                 self.get_self_addr()    
             if cmd[0] =="set" and len(cmd)>=4 and cmd[1] =="external":
                 self.external_addr = (cmd[2],int(cmd[3]))   
-            if cmd[0] =="datalayer" and len(cmd)>=2 and cmd[1] =="show":
-                print("datalayer listen on port %d  (%d) %s"%(self.data_port,
+            if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="show":
+                print("flow listen on port %d  (%d) %s"%(self.data_port,
                                                     self.count,
                                                     self.external_addr if self.external_addr else "None"))
-            if cmd[0] =="datalayer" and len(cmd)>=2 and cmd[1] =="detail":
+            if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="detail":
                 print(self.exchange_nodes,self.sessions)        
-            if cmd[0] =="datalayer" and len(cmd)>=2 and cmd[1] =="reset":
+            if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="reset":
                 self.exchange_nodes = {}
                 self.sessions ={}       
-            if cmd[0] =="datalayer" and len(cmd)>=3 and cmd[1] =="connect":
+            if cmd[0] =="flow" and len(cmd)>=3 and cmd[1] =="connect":
                 session = self.connect(int(cmd[2]))
                 if session:
                     print(session,self.sessions[session]) 

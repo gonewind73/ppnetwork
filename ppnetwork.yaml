@@ -23,11 +23,11 @@ shell_users:{
 "node_type": "client",
 "storage_root": 'C:/Users/heguofeng/workspace/FileManage/ppstorage1',
 "storage_net": "private" ,  #home , public, etc
-"nodes" : {
-         918560598: "private",
-         68767904: "private",
-         818300194: "private",
-         },     
+#"nodes" : {
+#         918560598: "private",
+#         68767904: "private",
+#         818300194: "private",
+#         },     
 #data 
 "data_port": 9000,
 #proxy
