@@ -18,6 +18,8 @@ from pp_flow import prepare_socket, Flow
 import random
 import hashlib
 import struct
+from lib2to3.tests.data.infinite_recursion import PKCS7_RECIP_INFO
+from collections import namedtuple
 
 
 '''
@@ -57,6 +59,7 @@ switch
 
 '''
 EXPIRE_TIME = 24*60*60*1000
+IPInfo = namedtuple("IPInfo",['node_id',"sock","expire"])
 
 class VPNBase(object):
     '''
@@ -67,7 +70,7 @@ class VPNBase(object):
         self.ip = ip
         self.mask = mask
         self.tun = None
-        self.quitting = False
+        self.quitting = True
         self.peer_sock = {}
 
     def start(self):
@@ -100,6 +103,7 @@ class VPNBase(object):
         
     def connect(self,dst_ip):
         logging.warning("I don;t know how to connect!")
+        return None
 
     def listen(self):
 #         wait_count = 0
@@ -114,7 +118,8 @@ class VPNBase(object):
                 if data:
                     dst_ip = self.get_dst(data)
                     if dst_ip not in self.peer_sock:
-                        self.connect(dst_ip)
+                        sock = self.connect(dst_ip)
+                        self.set_peersock(dst_ip,sock)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
                         logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
@@ -204,6 +209,9 @@ class PPVPN(PPNetApp):
     def start_vpn(self):
         ip = ip_itos(self.ip)
         logging.debug("start vpn with ip %s" %ip)
+        if self.vpn:
+            if not self.vpn.quitting:
+                self.vpn.quit()
 #         mask = socket.inet_ntoa(self.mask)
         self.vpn = VPNBase(ip,self.mask)
         self.vpn.connect = self._connect
@@ -248,12 +256,13 @@ class PPVPN(PPNetApp):
         if ip not in self.vlan_table:
             node_id = self.wait_arp_req(ip)
         else:
-            node_id = self.vlan_table[ip][0]
+            node_id = self.vlan_table[ip].node_id
         if node_id:
             session = self.station.flow.connect(peer_id=node_id)
             logging.info("session %s %s",session,self.station.flow.sessions)
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
                 self.connect_req(session,self.ip)
+                return self.station.flow.sessions[session][0]
             else:
                 print("can't connect vpn peer, offline!")
         else:
@@ -284,15 +293,15 @@ class PPVPN(PPNetApp):
         for ip in range(self.ip_range["start"],self.ip_range["end"]):
             if ip not in self.vlan_table:
                 return ip
-            if int(time.time()) - self.vlan_table[ip][1]> EXPIRE_TIME:
+            if int(time.time()) > self.vlan_table[ip].expire:
                 return ip 
         return 0
     
     def _verify_ip(self,node_id,ip):
         if ip in self.vlan_table:
-            if self.vlan_table[ip][0] == node_id:
+            if self.vlan_table[ip].node_id== node_id:
                 return ip
-            elif int(time.time()) - self.vlan_table[ip][1]> EXPIRE_TIME:
+            elif int(time.time())  > self.vlan_table[ip].expire:
                 return ip
             else:
                 return self._getFreeIP()
@@ -301,19 +310,19 @@ class PPVPN(PPNetApp):
     
     def _castARP(self,vpn_msg):
         for ip in self.vlan_table:
-            self.send_msg(self.vlan_table[ip][0], vpn_msg)
+            self.send_msg(self.vlan_table[ip].node_id, vpn_msg)
     
     def _cast(self,ppmsg):
         ppmsg.set("ttl",ppmsg.get("ttl")-1)
         for ip in self.vlan_table:
-            self.station.send_ppmsg(self.station.peers[self.vlan_table[0]],ppmsg)
+            self.station.send_ppmsg(self.station.peers[self.vlan_table[ip].node_id],ppmsg)
 
     def _setNodeIp(self,node_id,ip):
         for tip in list(self.vlan_table.keys()):
-            ipnode = self.vlan_table[tip]
-            if ipnode[0] == node_id or int(time.time())-ipnode[1]>EXPIRE_TIME:
+            ipinfo = self.vlan_table[tip]
+            if ipinfo.node_id== node_id or int(time.time())>ipinfo.expire:
                 self.vlan_table.pop(tip)
-        self.vlan_table[ip] = (node_id,int(time.time()))                
+        self.vlan_table[ip] = IPInfo(node_id,None,int(time.time())+EXPIRE_TIME)                
 
     def _confirm(self,vpn_msg):
         ip = vpn_msg.get_parameter("ip")
@@ -328,7 +337,7 @@ class PPVPN(PPNetApp):
         elif ip:
             result_ip = self._verify_ip(node_id, ip)
             if result_ip == ip:
-                if ip in self.vlan_table and self.vlan_table[ip][0]==node_id:
+                if ip in self.vlan_table and self.vlan_table[ip].node_id==node_id:
                     return
                 self._setNodeIp(node_id,ip)
                 self._castARP(vpn_msg)
@@ -366,7 +375,8 @@ class PPVPN(PPNetApp):
         logging.debug("get ip %s"%result_ip)
         if result_ip:
             self._castARP(PPVPN.VPNMessage(dictdata=dictdata))
-            self._setNodeIp(node_id,result_ip)            
+            self._setNodeIp(node_id,result_ip)
+            self.arp_res(node_id, self.ip)            
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):

@@ -100,11 +100,11 @@ class Flow(PPNetApp):
     def check(self):
         
         for s_id in list(self.sessions.keys()):
-            if not self.sessions[s_id][0] or not self.sessions[s_id][1]:
+            if not self.sessions[s_id][0]:
                 self.sessions[s_id][2] += 1
                 if self.sessions[s_id][2] > 2:
                     self.sessions.pop(s_id)
-            else:
+            elif self.sessions[s_id][0].fileno() <0 :
                 self.sessions.pop(s_id)
                 
         if not self.send_in_minute:
@@ -112,7 +112,6 @@ class Flow(PPNetApp):
                         
         if not self.quitting:
             self.send_in_minute = False
-            
             self.timer = threading.Timer(60, self.check)
             self.timer.start()
                
