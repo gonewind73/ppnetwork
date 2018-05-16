@@ -153,9 +153,10 @@ class Flow(PPNetApp):
             except Exception as exp:
                 logging.warning(exp)
                 continue
-            logging.debug("accept new connect %s %s"%(client_sock,client_addr))
-            self.send_in_minute = True
-            start_new_thread(self.session_process,(client_sock,client_addr,True,True))   
+            else:
+                logging.debug("accept new connect %s %s"%(client_sock,client_addr))
+                self.send_in_minute = True
+                start_new_thread(self.session_process,(client_sock,client_addr,True,True))   
 
     def send_peer_info(self,sock,session):
         '''
@@ -204,14 +205,14 @@ class Flow(PPNetApp):
             info = self.get_peer_info(client_sock,is_accept)
             if info: 
                 session = (info["session_src"],info["session_dst"],info["session_id"])
-                if session[1]==self.station.node_id:
+                if self.station.node_id in (session[0],session[1]):  # 无论源或目的 
                     if session not in self.sessions:
                         self.sessions[session]=[client_sock,need_ack,0]
                     if need_ack:
                         self.send_peer_info(client_sock, session)
                     if self.output_process :                            
                         start_new_thread(self.output_process,(client_sock,client_addr,session))
-                else:
+                else:  # turn node 
                     if session not in self.sessions:
                         self.sessions[session]=[client_sock,need_ack,0]
                     else:
@@ -262,7 +263,7 @@ class Flow(PPNetApp):
                         sock = prepare_socket(timeout=5)
                         sock.connect(addr)
                         self.send_peer_info(sock, session)
-                        self.session_process(sock, self.exchange_nodes[peer_id],need_ack=not isResponse)
+                        self.session_process(sock, self.exchange_nodes[peer_id],need_ack=False)
                     else:
                         return None
                 except:
