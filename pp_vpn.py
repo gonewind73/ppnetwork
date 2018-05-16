@@ -467,11 +467,23 @@ class PPVPN(PPNetApp):
             if cmd[0] =="stat":
                 print("vpn %s ip: %s"%("is runing " if self.vpn and not self.vpn.quitting else "not run",
                                        ip_itos(self.ip)))
-            if cmd[0] =="vpn" and len(cmd)>=2:
+            if cmd[0] =="vpn" and len(cmd)>=3  and cmd[1]=="ip":
                 print("vpn ip set to %s "%(cmd[1]))
                 self.stop_vpn()
-                self.ip = ip_stoi(cmd[1])
+                self.ip = ip_stoi(cmd[2])
                 self.start_vpn()
+            if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="auth":
+                self.auth_req(int(cmd[2]))
+                time.sleep(1)
+                self.run_command("vpn detail")
+            if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="arp":
+                self.arp_req(ip_stoi(cmd[2]))
+                time.sleep(1)
+                print(self.vlan_table) 
+            if cmd[0] =="vpn" and len(cmd)>=2  and cmd[1]=="detail":
+                print("vpn %d %s ip: %s"%(self.vlan_id, "is runing " if self.vpn and not self.vpn.quitting else "not run",
+                                       ip_itos(self.ip)))                
+                print(self.vlan_table)
 
 
             return True
