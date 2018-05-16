@@ -1453,7 +1453,7 @@ class PPStation(PPLinker):
         return self.get_status(node_id)
     
     def support_commands(self):
-        return ["beat","find","p2p","cast","route","ipport","help","quit","stat"]
+        return ["beat","find","p2p","cast","route","ipport","help","quit","stat","set"]
     
     def run_command(self,command_string):
         cmd = command_string.split(" ") 
@@ -1481,6 +1481,8 @@ class PPStation(PPLinker):
             self.set_route(peer_id=int(cmd[1]), turn_id= int(cmd[2]))
         elif cmd[0]=="ipport" and len(cmd)>=4:
             self.set_ipport(peer_id=int(cmd[1]), ip= cmd[2],port = int(cmd[3]))            
+        elif cmd[0]=="set" and len(cmd)>=3 and cmd[1]=="nattype":
+            self.nat_type = int(cmd[2])                  
         elif cmd[0]=="stat":
             if len(cmd) == 2:
                 peer_id = int(cmd[1])

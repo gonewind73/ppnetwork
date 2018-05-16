@@ -152,11 +152,10 @@ class Flow(PPNetApp):
                 client_sock, client_addr = self.servsock.accept()
             except Exception as exp:
                 logging.warning(exp)
-                pass
-            else:
-                logging.debug("accept new connect %s %s"%(client_sock,client_addr))
-                self.send_in_minute = True
-                start_new_thread(self.session_process,(client_sock,client_addr,True,True))   
+                continue
+            logging.debug("accept new connect %s %s"%(client_sock,client_addr))
+            self.send_in_minute = True
+            start_new_thread(self.session_process,(client_sock,client_addr,True,True))   
 
     def send_peer_info(self,sock,session):
         '''
@@ -421,7 +420,7 @@ class Flow(PPNetApp):
                 self.sessions ={}       
             if cmd[0] =="flow" and len(cmd)>=3 and cmd[1] =="connect":
                 session = self.connect(int(cmd[2]))
-                if session:
+                if session and session in self.sessions:
                     print(session,self.sessions[session]) 
                 else:
                     print("connect failure")                             
