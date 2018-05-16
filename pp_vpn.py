@@ -56,6 +56,7 @@ switch
 
 
 '''
+EXPIRE_TIME = 24*60*60*1000
 
 class VPNBase(object):
     '''
@@ -283,7 +284,7 @@ class PPVPN(PPNetApp):
         for ip in range(self.ip_range["start"],self.ip_range["end"]):
             if ip not in self.vlan_table:
                 return ip
-            if int(time.time()) - self.vlan_table[ip][1]> 24*60*60:
+            if int(time.time()) - self.vlan_table[ip][1]> EXPIRE_TIME:
                 return ip 
         return 0
     
@@ -291,7 +292,7 @@ class PPVPN(PPNetApp):
         if ip in self.vlan_table:
             if self.vlan_table[ip][0] == node_id:
                 return ip
-            elif int(time.time()) - self.vlan_table[ip][1]> 24*60*60:
+            elif int(time.time()) - self.vlan_table[ip][1]> EXPIRE_TIME:
                 return ip
             else:
                 return self._getFreeIP()
@@ -310,7 +311,7 @@ class PPVPN(PPNetApp):
     def _setNodeIp(self,node_id,ip):
         for tip in list(self.vlan_table.keys()):
             ipnode = self.vlan_table[tip]
-            if ipnode[0] == node_id or int(time.time())-ipnode[1]>24*60*60:
+            if ipnode[0] == node_id or int(time.time())-ipnode[1]>EXPIRE_TIME:
                 self.vlan_table.pop(tip)
         self.vlan_table[ip] = (node_id,int(time.time()))                
 
