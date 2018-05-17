@@ -463,7 +463,7 @@ class PPVPN(PPNetApp):
         if command == "arp_req":
             if self._verify_msg(vpn_msg):
                 if vpn_msg.get_parameter("ip") == self.ip:
-                    self.arp_res(node_id,vpn_msg.get_parameter("ip"))
+                    self.arp_res(vpn_msg.get_parameter("node_id"),vpn_msg.get_parameter("ip"))
                 else:
                     self._lan_forward(ppmsg)
   
