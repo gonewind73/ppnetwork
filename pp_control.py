@@ -1245,7 +1245,7 @@ class PPStation(PPLinker):
         
     def get_peer_by_addr(self,addr):
         for peer_id in self.peers:
-            if self.peers[peer_id].external_addr == addr:
+            if (self.peers[peer_id].ip,self.peers[peer_id].port) == addr and self.peers[peer_id].distance==1:
                 return peer_id
         return 0
     
