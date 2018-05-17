@@ -341,7 +341,7 @@ class PPVPN(PPNetApp):
         ip = vpn_msg.get_parameter("ip")
         node_id = vpn_msg.get_parameter("node_id")
         if node_id == self.station.node_id:
-            self.set_ip(ip)
+            self.set_ip(ip_itos(ip))
         elif ip:
             ok,suggest_ip = self._verify_ip(node_id, ip)
             if ok:
