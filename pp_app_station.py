@@ -57,7 +57,7 @@ def main(config):
     while not is_client and not station.quitting:
         time.sleep(3)
         
-    s= "help"
+    s= ""
     while not station.quitting:
         try:
             station.run_command(s)

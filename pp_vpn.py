@@ -86,7 +86,7 @@ class VPNBase(object):
         if self.quitting:
             return
         self.quitting = True
-        for ip in self.peer_sock:
+        for ip in self.peer_sock and self.peer_sock[ip]:
             self.peer_sock[ip].close()
         if self.tun:
             self.tun.close()
@@ -118,7 +118,8 @@ class VPNBase(object):
                     dst_ip = self.get_dst(data)
                     if dst_ip not in self.peer_sock:
                         sock = self.connect(dst_ip)
-                        self.set_peersock(dst_ip,sock)
+                        if sock:
+                            self.set_peersock(dst_ip,sock)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
                         logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
