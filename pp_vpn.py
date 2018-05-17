@@ -28,14 +28,14 @@ vpn config:
     
 vpn function:
 auth   vlan_token=mac(vlanid,node_id,secret,sequence)
-auth_req(vlan_id,vlan_token,mynode_id,myip(optional))  broadcast on net,wait reply .
-   node receive auth_req, 
+ip_req(vlan_id,vlan_token,mynode_id,myip(optional))  broadcast on net,wait reply .
+   node receive ip_req, 
        if self vlan:
-            send auth_res , 
+            send ip_res , 
        elif public:
            broadcast to peers 
         
-auth_res(vlan_id,vlan_token,status,available_ips(optional))
+ip_res(vlan_id,vlan_token,status,available_ips(optional))
     if req given ip,check it is available to it,if ok , res ok to reqer,else res error to reqer
     if req has no ip, res min ip available to peer 
     vlan should has {ip:(node_id,last_active,type)} type is static 
@@ -172,7 +172,7 @@ class PPVPN(PPNetApp):
     '''
     class VPNMessage(PPNetApp.AppMessage):
         def __init__(self,**kwargs):
-            tags_id={"auth_req":1,"auth_res":2,"arp_req":3,"arp_res":4,"connect_req":5,"connect_res":6,
+            tags_id={"ip_req":1,"ip_res":2,"arp_req":3,"arp_res":4,"connect_req":5,"connect_res":6,
                      "session_src":11,"session_dst":12,"session_id":13,"ip":14,"node_id":15,"token":16,"seed":17,"vlan_id":18}
             parameter_type = {
                               11:"I",12:"I",13:"I",14:"I",15:"I",17:"I",18:"I"}
@@ -197,7 +197,7 @@ class PPVPN(PPNetApp):
 
     def start(self):
         super().start()
-        start_new_thread(do_wait,(lambda :self.auth_req(BroadCastId),lambda: self.is_running==True,3))
+        start_new_thread(do_wait,(lambda :self.ip_req(BroadCastId),lambda: self.ip,3))
         self.start_vpn()
         return self
     
@@ -231,7 +231,7 @@ class PPVPN(PPNetApp):
         self.is_running = False
 
     def set_ip(self,ip,mask="255.255.255.0"):
-        ok,_ = self._verify_ip(self.station.node_id, ip)
+        ok,_ = self._verify_ip(self.station.node_id, ip_stoi(ip))
         if ok:
             self.ip = ip_stoi(ip)
             self.mask = mask
@@ -351,12 +351,12 @@ class PPVPN(PPNetApp):
                 if self._setARP(node_id,ip):
                     self._lan_cast(vpn_msg)
             else:#error
-                self.auth_res(node_id,suggest_ip)
+                self.ip_res(node_id,suggest_ip)
         
-    def auth_req(self,node_id):
+    def ip_req(self,node_id):
 #         seed = random.randint(0,0xffffffff)
         seed = int(time.time())
-        dictdata = {"command":"auth_req",
+        dictdata = {"command":"ip_req",
                     "parameters":{
                         "node_id":self.station.node_id,
                         "token":self._getToken(self.station.node_id,seed),
@@ -366,7 +366,7 @@ class PPVPN(PPNetApp):
         logging.debug(dictdata)
         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))        
 
-    def auth_res(self,node_id,ip):
+    def ip_res(self,node_id,ip):
         result_ip = 0
         if ip:
             _,result_ip = self._verify_ip(node_id, ip)
@@ -376,18 +376,18 @@ class PPVPN(PPNetApp):
             pass
 #         seed = random.randint(0,0xffffffff)
         seed = int(time.time())
-        dictdata = {"command":"auth_res",
+        dictdata = {"command":"ip_res",
                     "parameters":{
                         "node_id":node_id,
                         "token":self._getToken(node_id,seed),
                         "vlan_id":self.vlan_id,
                         "ip":result_ip,
                         "seed":seed}}
-        logging.debug("get ip %s"%result_ip)
+        logging.debug("set %d ip %s"%(node_id,result_ip))
         if result_ip:
             self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
             self._setARP(node_id,result_ip)
-            self.arp_res(node_id, self.ip)            
+#             self.arp_res(node_id, self.ip)            
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):
@@ -453,10 +453,10 @@ class PPVPN(PPNetApp):
         command = vpn_msg.get("command")
         
         node_id = ppmsg.get("src_id")
-        if command == "auth_req":
+        if command == "ip_req":
             if self._verify_msg(vpn_msg):
-                self.auth_res(node_id,vpn_msg.get_parameter("ip"))
-        if command == "auth_res":
+                self.ip_res(node_id,vpn_msg.get_parameter("ip"))
+        if command in ( "ip_res","arp_res"):
             if self._verify_msg(vpn_msg):
                 self._confirm(vpn_msg)
         if command == "arp_req":
@@ -465,9 +465,7 @@ class PPVPN(PPNetApp):
                     self.arp_res(node_id,vpn_msg.get_parameter("ip"))
                 else:
                     self._lan_forward(ppmsg)
-        if command == "arp_res":
-            if self._verify_msg(vpn_msg):
-                self._confirm(vpn_msg)     
+  
         if command in ("connect_req","connect_res"):
             session = (vpn_msg.get_parameter("session_src"),vpn_msg.get_parameter("session_dst"),vpn_msg.get_parameter("session_id"))
             if not (session in self.station.flow.sessions and self.station.flow.sessions[session][0]):
@@ -497,7 +495,7 @@ class PPVPN(PPNetApp):
                 self.set_ip(cmd[2])
                 
             if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="auth":
-                self.auth_req(int(cmd[2]))
+                self.ip_req(int(cmd[2]))
                 time.sleep(1)
                 self.run_command("vpn detail")
             if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="arp":
@@ -596,7 +594,7 @@ class TestVPN(unittest.TestCase):
         self.vpnA.start()
         self.vpnB.start()
         time.sleep(3)
-        self.vpnA.auth_req(BroadCastId)
+        self.vpnA.ip_req(BroadCastId)
         self.assertTrue(self.vpnA.is_running==True,"test Auth")
         pass
     
