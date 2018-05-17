@@ -248,7 +248,7 @@ class PPVPN(PPNetApp):
     def _connect(self,sip):
         ip = ip_stoi(sip)
         if not (self.ip_range["start"] < ip < self.ip_range["end"]):
-            logging.debug("not valid vlan ip")
+#             logging.debug("not valid vlan ip")
             return 
         if ip not in self.vlan_table:
             node_id = self.wait_arp_req(ip)
