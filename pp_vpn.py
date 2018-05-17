@@ -228,10 +228,13 @@ class PPVPN(PPNetApp):
         self.is_running = False
 
     def set_ip(self,ip,mask="255.255.255.0"):
-        ok,suggest_ip = self._verify_ip(self.station.node_id, ip)
+        ok,_ = self._verify_ip(self.station.node_id, ip)
         if ok:
             self.ip = ip_stoi(ip)
             self.mask = mask
+        else:
+            return
+        logging.info("%d  set ip %d"%(self.station.node_id,self.ip))
         if self.ip:
             self._setARP(self.station.node_id, self.ip)
             self.arp_cast(self.station.node_id, self.ip)
@@ -269,9 +272,11 @@ class PPVPN(PPNetApp):
     
     def _verify_msg(self,vpn_msg):
         if vpn_msg.get_parameter("vlan_id") == self.vlan_id:
-            if vpn_msg.get_parameter("token") == self._getToken(vpn_msg.get_parameter("node_id"), 
-                                                                vpn_msg.get_parameter("seed")):
-                return True
+            timestamp = vpn_msg.get_parameter("seed")
+            if 10 > int(time.time()) - timestamp > -10:  
+                if vpn_msg.get_parameter("token") == self._getToken(vpn_msg.get_parameter("node_id"), 
+                                                                    vpn_msg.get_parameter("seed")):
+                    return True
             else:
                 logging.warning("token mismatch %s"%self._getToken(vpn_msg.get_parameter("node_id"), 
                                                                 vpn_msg.get_parameter("seed")))
@@ -325,27 +330,27 @@ class PPVPN(PPNetApp):
         self.vlan_table[ip] = IPInfo(node_id,int(time.time())+EXPIRE_TIME)
         return True                
 
+    
+    def arp_cast(self,node_id,ip):
+        for ip in self.vlan_table:
+            self.arp_res(self.vlan_table[ip].node_id,self.ip)
+            
     def _confirm(self,vpn_msg):
         ip = vpn_msg.get_parameter("ip")
         node_id = vpn_msg.get_parameter("node_id")
         if node_id == self.station.node_id:
-            if ip:
-                self.ip = ip
-                logging.info("%d  set ip %d"%(self.station.node_id,self.ip))
-                self.start_vpn()
-                self._setARP(node_id, ip)
-            else:
-                logging.warning("%d error set ip %d"%(self.station.node_id,self.ip))
+            self.set_ip(ip)
         elif ip:
-            result,result_ip = self._verify_ip(node_id, ip)
-            if result:
+            ok,suggest_ip = self._verify_ip(node_id, ip)
+            if ok:
                 if self._setARP(node_id,ip):
                     self._lan_cast(vpn_msg)
             else:#error
-                self.auth_res(node_id,result_ip)
+                self.auth_res(node_id,suggest_ip)
         
     def auth_req(self,node_id):
-        seed = random.randint(0,0xffffffff)
+#         seed = random.randint(0,0xffffffff)
+        seed = int(time.time())
         dictdata = {"command":"auth_req",
                     "parameters":{
                         "node_id":self.station.node_id,
@@ -364,7 +369,8 @@ class PPVPN(PPNetApp):
             #get max 
             result_ip = self._getFreeIP()
             pass
-        seed = random.randint(0,0xffffffff)
+#         seed = random.randint(0,0xffffffff)
+        seed = int(time.time())
         dictdata = {"command":"auth_res",
                     "parameters":{
                         "node_id":node_id,
@@ -380,7 +386,8 @@ class PPVPN(PPNetApp):
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):
-        seed = random.randint(0,0xffffffff)
+#         seed = random.randint(0,0xffffffff)
+        seed = int(time.time())
         dictdata = {"command":"arp_req",
                     "parameters":{
                         "node_id":self.station.node_id,
@@ -391,7 +398,8 @@ class PPVPN(PPNetApp):
         self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata)) 
            
     def arp_res(self,req_node_id,ip):
-        seed = random.randint(0,0xffffffff)
+#         seed = random.randint(0,0xffffffff)
+        seed = int(time.time())
         dictdata = {"command":"arp_res",
                     "parameters":{
                         "node_id":self.station.node_id,
@@ -400,10 +408,7 @@ class PPVPN(PPNetApp):
                         "ip":ip,
                         "seed":seed}}
         self.send_msg(req_node_id,PPVPN.VPNMessage(dictdata=dictdata))       
-    
-    def arp_cast(self,node_id,ip):
-        for ip in self.vlan_table:
-            self.arp_res(self.vlan_table[ip].node_id,self.ip)
+
         
     def wait_arp_req(self,ip):
         self.arp_req(ip) 
@@ -466,12 +471,12 @@ class PPVPN(PPNetApp):
              
         if command == "connect_req":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
-                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.sessions[session][0])
+                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.pop_session(session))
                 
             self.connect_res(session,self.ip)
         if command == "connect_res":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
-                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.sessions[session][0])
+                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.pop_session(session))
                 
 #             self.connect(node_id)
 

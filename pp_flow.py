@@ -193,6 +193,12 @@ class Flow(PPNetApp):
             logging.debug("get peer_info return error %s"%exp)
             return None
         
+    def pop_session(self,session):
+        if session in self.sessions:
+            sock = self.sessions[session][0]
+            self.sessions.pop(session)
+            return sock
+        return None
         
     def session_process(self,client_sock,client_addr,need_ack=False,is_accept=False):
         '''
