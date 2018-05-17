@@ -86,8 +86,9 @@ class VPNBase(object):
         if self.quitting:
             return
         self.quitting = True
-        for ip in self.peer_sock and self.peer_sock[ip]:
-            self.peer_sock[ip].close()
+        for ip in self.peer_sock:
+            if self.peer_sock[ip]:
+                self.peer_sock[ip].close()
         if self.tun:
             self.tun.close()
         logging.info("vpn quit!")
