@@ -96,6 +96,9 @@ class VPNBase(object):
         return socket.inet_ntoa(data[16:20])
         
     def set_peersock(self,ip,peer_sock):
+        '''
+        ip string = "192.168.22.1"
+        '''
         self.peer_sock[ip] = peer_sock
         if peer_sock:
             start_new_thread(self.receive_peer,(ip,peer_sock,))
@@ -462,12 +465,12 @@ class PPVPN(PPNetApp):
              
         if command == "connect_req":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
-                self.vpn.set_peersock(vpn_msg.get_parameter("ip"),self.station.flow.sessions[session][0])
+                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.sessions[session][0])
                 
             self.connect_res(session,self.ip)
         if command == "connect_res":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
-                self.vpn.set_peersock(vpn_msg.get_parameter("ip"),self.station.flow.sessions[session][0])
+                self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.sessions[session][0])
                 
 #             self.connect(node_id)
 
@@ -495,7 +498,8 @@ class PPVPN(PPNetApp):
                 print("vpn %d %s ip: %s"%(self.vlan_id, "is runing " if self.vpn and not self.vpn.quitting else "not run",
                                        ip_itos(self.ip)))                
                 print(self.vlan_table)
-                print(self.vpn.peer_sock)
+                if self.vpn:
+                    print(self.vpn.peer_sock)
 
 
             return True
