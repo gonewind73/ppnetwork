@@ -224,16 +224,7 @@ class Flow(PPNetApp):
             else:
                 logging.debug("can't get peer info")
                 pass 
-                #discard
-#         else:
-#             logging.debug("unknown peer")
-
-# 
-#     def output_process(self,client_sock,client_addr,session):
-#         '''
-#         canbe overload 
-#         '''
-#         pass     
+ 
 
     def req_connect(self,peer_id,dst_id,session):
         dictdata = {"command":"connect_req",
@@ -352,12 +343,7 @@ class Flow(PPNetApp):
                                   "port":port,
                                   }}
         return self.DataMessage(dictdata = dictdata)
-#         self.connect_port = random.randint(10000, 60000)
-#         proxy_socket = prepare_socket(timeout=5,port=port)
-#         try:
-#             proxy_socket.connect((self.station.peers[self.proxy_node].ip,self.station.peers[self.proxy_node].port))
-#         except:
-#             pass
+
 
     def get_addr(self,peer_id):
         if peer_id in self.exchange_nodes and self.exchange_nodes[peer_id]:
@@ -392,9 +378,6 @@ class Flow(PPNetApp):
                                                               data_msg.get_parameter("session_dst"),
                                                               data_msg.get_parameter("session_id")),
                          isResponse = True)
-#                 sock = self.proxy.connectRemote((data_msg.get_parameter("ip"),data_msg.get_parameter("port")))
-#                 if sock:
-#                     sock.sendall(struct.pack("I",data_msg.get_parameter("session_id")))
                 
         pass
     
