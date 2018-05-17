@@ -5,8 +5,7 @@ Created on 2018年5月5日
 '''
 import unittest
 from pp_control import PPNetApp, PPStation
-from pp_link import PP_APPID,set_debug, BroadCastId, wait_available, do_wait,\
-   FakeNet, NAT_TYPE, ip_itos, ip_stoi
+from pp_link import PP_APPID,set_debug, BroadCastId, wait_available, do_wait,   FakeNet, NAT_TYPE, ip_itos, ip_stoi
 from tuntap import TunTap 
 from _thread import start_new_thread
 import logging
@@ -57,6 +56,7 @@ switch
 
 '''
 EXPIRE_TIME = 24*60*60*1000
+TIME_WINDOW = 100
 IPInfo = namedtuple("IPInfo",['node_id',"expire"])
 
 class VPNBase(object):
@@ -276,7 +276,7 @@ class PPVPN(PPNetApp):
     def _verify_msg(self,vpn_msg):
         if vpn_msg.get_parameter("vlan_id") == self.vlan_id:
             timestamp = vpn_msg.get_parameter("seed")
-            if 10 > int(time.time()) - timestamp > -10:  
+            if TIME_WINDOW*(-1) < int(time.time()) - timestamp < TIME_WINDOW:  
                 if vpn_msg.get_parameter("token") == self._getToken(vpn_msg.get_parameter("node_id"), 
                                                                     vpn_msg.get_parameter("seed")):
                     return True
@@ -495,7 +495,7 @@ class PPVPN(PPNetApp):
                 print("vpn ip set to %s "%(cmd[1]))
                 self.set_ip(cmd[2])
                 
-            if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="auth":
+            if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="ipreq":
                 self.ip_req(int(cmd[2]))
                 time.sleep(1)
                 self.run_command("vpn detail")
