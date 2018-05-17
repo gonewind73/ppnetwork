@@ -277,9 +277,11 @@ class PPVPN(PPNetApp):
                 if vpn_msg.get_parameter("token") == self._getToken(vpn_msg.get_parameter("node_id"), 
                                                                     vpn_msg.get_parameter("seed")):
                     return True
-            else:
-                logging.warning("token mismatch %s"%self._getToken(vpn_msg.get_parameter("node_id"), 
+                else:
+                    logging.warning("token mismatch %s"%self._getToken(vpn_msg.get_parameter("node_id"), 
                                                                 vpn_msg.get_parameter("seed")))
+            else:
+                logging.warning("not correct timestampe %d %d"%(timestamp,int(time.time())))
         else:
             logging.debug("self vlan %d peer vlan %d"%(self.vlan_id,vpn_msg.get_parameter("vlan_id")))
 
