@@ -1321,7 +1321,8 @@ class PPStation(PPLinker):
                                             "app_id":app_msg.get("app_id")})
 #                 if peer.status or always:
                 return self.send_ppmsg(peer, ppmsg, need_ack)
-
+            if peer_id == self.node_id:
+                return 0
             print("can't communicate to %s" % peer_id)
             return 0
     

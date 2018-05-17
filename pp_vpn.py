@@ -261,9 +261,9 @@ class PPVPN(PPNetApp):
                 self.connect_req(session,self.ip)
                 return self.station.flow.sessions[session][0]
             else:
-                print("can't connect vpn peer, offline!")
+                print("can't connect vpn peer!")
         else:
-            logging.warning("can't connect vpn peer")             
+            logging.warning("can't get vpn peer")             
 
     def _getToken(self,node_id,seed):
         md5obj = hashlib.md5()
