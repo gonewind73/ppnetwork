@@ -1,1 +1,1 @@
-{"201": {"node_id": 201, "nat_type": 7, "port": 0, "will_to_turn": true, "ip": "0.0.0.0", "secret": ""}, "202": {"node_id": 202, "nat_type": 7, "port": 0, "will_to_turn": true, "ip": "0.0.0.0", "secret": ""}, "100": {"node_id": 100, "nat_type": 7, "port": 0, "will_to_turn": true, "ip": "0.0.0.0", "secret": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"}}
+{"102": {"node_id": 102, "ip": "180.153.152.193", "will_to_turn": true, "secret": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000", "port": 54102, "nat_type": 2}}

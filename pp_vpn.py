@@ -74,13 +74,10 @@ class VPNBase(object):
     def start(self):
         self.quitting = False
         self.tun =  TunTap("Tun")
-
         if not self.tun:
             logging.warning("create tap device failure!")
             return None
-        print("vpn start")
-        self.tun.config(self.ip,self.mask)
-        start_new_thread(self.listen, ())
+        self.config(self.ip,self.mask)
         
     
 
@@ -96,7 +93,12 @@ class VPNBase(object):
         logging.info("vpn quit!")
     
     def config(self,ip,mask):
-        self.tun.config(self.ip,self.mask)
+        self.ip=ip
+        self.mask = mask
+        if not self.ip == "0.0.0.0":
+            self.tun.config(self.ip,self.mask)
+            start_new_thread(self.listen, ())
+            print("vpn start")
 
     def get_dst(self,data):
         return socket.inet_ntoa(data[16:20])
@@ -196,6 +198,7 @@ class PPVPN(PPNetApp):
     def start(self):
         super().start()
         start_new_thread(do_wait,(lambda :self.auth_req(BroadCastId),lambda: self.is_running==True,3))
+        self.start_vpn()
         return self
     
     def quit(self):
