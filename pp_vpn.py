@@ -97,7 +97,8 @@ class VPNBase(object):
         
     def set_peersock(self,ip,peer_sock):
         self.peer_sock[ip] = peer_sock
-        start_new_thread(self.receive_peer,(ip,peer_sock,))
+        if peer_sock:
+            start_new_thread(self.receive_peer,(ip,peer_sock,))
         
     def connect(self,dst_ip):
         logging.warning("I don;t know how to connect!")
@@ -493,6 +494,7 @@ class PPVPN(PPNetApp):
                 print("vpn %d %s ip: %s"%(self.vlan_id, "is runing " if self.vpn and not self.vpn.quitting else "not run",
                                        ip_itos(self.ip)))                
                 print(self.vlan_table)
+                print(self.vpn.peer_sock)
 
 
             return True
