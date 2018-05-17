@@ -1276,7 +1276,7 @@ class PPStation(PPLinker):
 
     def set_status(self,node_id,status):
         if node_id in self.peers and not status == self.peers[node_id].status:
-            self.peers[node_id].set_node_status(status)
+            self.peers[node_id].set_status(status)
             for nid in self.peers:
                 if self.peers[nid].turn_server == node_id:
                     self.set_status(nid, status)

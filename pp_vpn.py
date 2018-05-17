@@ -85,7 +85,7 @@ class VPNBase(object):
         if self.quitting:
             return
         self.quitting = True
-        for ip in self.peer_sock:
+        for ip in list(self.peer_sock.keys()):
             if self.peer_sock[ip]:
                 self.peer_sock[ip].close()
         if self.tun:
@@ -320,7 +320,8 @@ class PPVPN(PPNetApp):
     def _lan_forward(self,ppmsg):
         ppmsg.set("ttl",ppmsg.get("ttl")-1)
         for ip in self.vlan_table:
-            self.station.send_ppmsg(self.station.peers[self.vlan_table[ip].node_id],ppmsg)
+            if not self.vlan_table[ip].node_id == self.station.node_id:
+                self.station.send_ppmsg(self.station.peers[self.vlan_table[ip].node_id],ppmsg)
 
     def _setARP(self,node_id,ip):
         '''
@@ -387,7 +388,7 @@ class PPVPN(PPNetApp):
         if result_ip:
             self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
             self._setARP(node_id,result_ip)
-#             self.arp_res(node_id, self.ip)            
+            self.arp_res(node_id, self.ip)      # tell peer self arp      
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):
