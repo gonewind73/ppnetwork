@@ -8,7 +8,6 @@ from pp_control import PPNetApp, PPStation
 from pp_link import PP_APPID,set_debug, BroadCastId, wait_available, do_wait,\
    FakeNet, NAT_TYPE, ip_itos, ip_stoi
 from tuntap import TunTap 
-import threading
 from _thread import start_new_thread
 import logging
 import socket
@@ -18,7 +17,6 @@ from pp_flow import prepare_socket, Flow
 import random
 import hashlib
 import struct
-from lib2to3.tests.data.infinite_recursion import PKCS7_RECIP_INFO
 from collections import namedtuple
 
 
