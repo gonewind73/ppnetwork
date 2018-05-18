@@ -352,7 +352,8 @@ class PPVPN(PPNetApp):
             ok,suggest_ip = self._verify_ip(node_id, ip)
             if ok:
                 if self._setARP(node_id,ip):
-                    self._lan_cast(vpn_msg)
+#                     self._lan_cast(vpn_msg)
+                    pass
             else:#error
                 self.ip_res(node_id,suggest_ip)
         
@@ -389,7 +390,7 @@ class PPVPN(PPNetApp):
         logging.debug("set %d ip %s"%(node_id,result_ip))
         if result_ip:
             self._setARP(node_id,result_ip)            
-            self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
+#             self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
             self.arp_res(node_id, self.ip)      # tell peer self arp      
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
