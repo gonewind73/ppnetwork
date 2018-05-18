@@ -73,7 +73,7 @@ class VPNBase(object):
 
     def start(self):
         self.quitting = False
-        self.tun =  TunTap("Tun")
+        self.tun =  TunTap(nic_type="Tun",nic_name="tun0")
         if not self.tun:
             logging.warning("create tap device failure!")
             return None
