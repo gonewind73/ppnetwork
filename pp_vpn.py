@@ -247,8 +247,8 @@ class PPVPN(PPNetApp):
                 
     def _connect(self,sip):
         ip = ip_stoi(sip)
-        if not (self.ip_range["start"] < ip < self.ip_range["end"]):
-#             logging.debug("not valid vlan ip")
+        if not (self.ip_range["start"] <= ip <= self.ip_range["end"]):
+#             logging.debug("not valid vlan ip start %s %d"%(self.ip_range,ip))
             return 
         if ip not in self.vlan_table:
             node_id = self.wait_arp_req(ip)
@@ -319,8 +319,10 @@ class PPVPN(PPNetApp):
     
     def _lan_forward(self,ppmsg):
         ppmsg.set("ttl",ppmsg.get("ttl")-1)
+        src_id = ppmsg.get("src_id")
         for ip in self.vlan_table:
-            if not self.vlan_table[ip].node_id == self.station.node_id:
+            if not self.vlan_table[ip].node_id in (self.station.node_id,src_id):
+                ppmsg.set("dst_id",self.vlan_table[ip].node_id)
                 self.station.send_ppmsg(self.station.peers[self.vlan_table[ip].node_id],ppmsg)
 
     def _setARP(self,node_id,ip):

@@ -817,8 +817,9 @@ class Beater(PPNetApp):
         
         if command in ("req_id",):
             node_id = self.set_peer_info(msg,addr) 
-            logging.debug("%d peer node_id %d"%(self.station.node_id,node_id))
-            self.res_id(node_id, addr)
+            if node_id:
+                logging.debug("%d peer node_id %d"%(self.station.node_id,node_id))
+                self.res_id(node_id, addr)
             
         if command in ("res_id",):
             self_info = parameters["peer"]
