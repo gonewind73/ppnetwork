@@ -296,11 +296,12 @@ class PPVPN(PPNetApp):
 
     def _getFreeIP(self):
         for ip in range(ip_stoi(self.ip_range["start"]),ip_stoi(self.ip_range["end"])):
-            if ip_itos(ip) not in self.vlan_table:
-                return ip
-            if int(time.time()) > self.vlan_table[ip].expire:
-                return ip 
-        return 0
+            sip = ip_itos(ip)
+            if sip not in self.vlan_table:
+                return sip
+            if int(time.time()) > self.vlan_table[sip].expire:
+                return sip 
+        return '0.0.0.0'
     
     def _verify_ip(self,node_id,ip):
         '''
