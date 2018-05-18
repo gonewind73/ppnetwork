@@ -17,6 +17,7 @@ import random
 import hashlib
 import struct
 from collections import namedtuple
+import threading
 
 
 '''
@@ -64,10 +65,9 @@ class VPNBase(object):
     connect_peer should define by outside
     '''
 
-    def __init__(self,ip,mask):
+    def __init__(self,ip="0.0.0.0",mask="255.255.255.0"):
         self.ip = ip
         self.mask = mask
-        self.tun = None
         self.quitting = True
         self.peer_sock = {}   # {"192.168.1.2":sock}
 
@@ -76,10 +76,8 @@ class VPNBase(object):
         self.tun =  TunTap(nic_type="Tun",nic_name="tun0")
         if not self.tun:
             logging.warning("create tap device failure!")
-            return None
+            return
         self.config(self.ip,self.mask)
-        
-    
 
     def quit(self):
         if self.quitting:
@@ -120,6 +118,7 @@ class VPNBase(object):
             try:
                 data = self.tun.read()
                 if data:
+#                     logging.debug("rev %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
                     dst_ip = self.get_dst(data)
                     if dst_ip not in self.peer_sock:
                         sock = self.connect(dst_ip)
@@ -127,7 +126,8 @@ class VPNBase(object):
                             self.set_peersock(dst_ip,sock)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
-#                         logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
+                    if dst_ip == "192.168.33.2":
+                        logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
             except OSError as exps:
                 logging.warning(exps)
                 break
@@ -197,7 +197,7 @@ class PPVPN(PPNetApp):
 
     def start(self):
         super().start()
-        start_new_thread(do_wait,(lambda :self.ip_req(BroadCastId),lambda: self.ip,3))
+        self.check()
         self.start_vpn()
         return self
     
@@ -205,6 +205,13 @@ class PPVPN(PPNetApp):
         self.stop_vpn()
         super().quit()
 
+    def check(self):
+        if not self.is_running:
+            start_new_thread(do_wait,(lambda :self.ip_req(BroadCastId),lambda: self.ip,3))
+        
+        self.timer = threading.Timer(60, self.check)
+        self.timer.start()
+        
     def start_vpn(self):
         ip = ip_itos(self.ip)
         logging.debug("start vpn with ip %s" %ip)
