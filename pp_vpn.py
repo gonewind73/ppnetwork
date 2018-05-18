@@ -417,7 +417,7 @@ class PPVPN(PPNetApp):
         dictdata = {"command":"arp_res",
                     "parameters":{
                         "node_id":req_node_id,
-                        "token":self._getToken(self.station.node_id,seed),
+                        "token":self._getToken(req_node_id,seed),
                         "vlan_id":self.vlan_id,
                         "ip":ip_stoi(ip),
                         "seed":seed}}
