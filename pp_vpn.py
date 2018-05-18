@@ -70,6 +70,7 @@ class VPNBase(object):
         self.mask = mask
         self.quitting = True
         self.peer_sock = {}   # {"192.168.1.2":sock}
+        self.tun = None
 
     def start(self):
         self.quitting = False
@@ -184,16 +185,17 @@ class PPVPN(PPNetApp):
         
         super().__init__(station=station,app_id= PP_APPID["VPN"] )
         self.vlan_id = config.get("Vlan",0)
-        ip_range = config.get("IPRange",{"start":"192.168.33.1","end":"192.168.33.255"})
-        self.ip_range = {"start":ip_stoi(ip_range["start"]),"end":ip_stoi(ip_range["end"])}
-        ip = config.get("VlanIP","0.0.0.0")
-        mask = config.get("VlanMask","255.255.255.0")
+        self.ip_range = config.get("IPRange",{"start":"192.168.33.1","end":"192.168.33.255"})
+#         self.ip_range = {"start":ip_stoi(ip_range["start"]),"end":ip_stoi(ip_range["end"])}
+        self.ip = config.get("VlanIP","0.0.0.0")
+        self.mask = config.get("VlanMask","255.255.255.0")
         self.secret = config.get("VlanSecret","12345678").encode()
         self.is_running = False
         self.vlan_table = {}  #{ip:(node_id,last_active)
         self.vpn = None
         self.testing = False
-        self.set_ip(ip, mask)        
+#         self.ip = ip_stoi(ip)
+#         self.mask = mask
 
     def start(self):
         super().start()
@@ -207,29 +209,22 @@ class PPVPN(PPNetApp):
 
     def check(self):
         if not self.is_running:
-            start_new_thread(do_wait,(lambda :self.ip_req(BroadCastId),lambda: self.ip,3))
+            start_new_thread(do_wait,(lambda :self.ip_req(BroadCastId),lambda: not self.ip=="0.0.0.0",3))
         
         self.timer = threading.Timer(60, self.check)
         self.timer.start()
         
     def start_vpn(self):
-        ip = ip_itos(self.ip)
-        logging.debug("start vpn with ip %s" %ip)
         if self.vpn:
             if not self.vpn.quitting:
                 self.vpn.quit()
-#         mask = socket.inet_ntoa(self.mask)
-        self.vpn = VPNBase(ip,self.mask)
+        self.vpn = VPNBase()
         self.vpn.connect = self._connect
         if not self.testing:
             self.vpn.start()
-        self.is_running = True
-#         self.station.flow.output_process =lambda sock,addr,session: self.proxy.set_peersock(sock)
-#         self.proxy.connect_peer = lambda session_id: self.station.flow.connectRemote_DL(self.proxy_node,
-#                                                             (self.station.node_id,self.proxy_node,session_id))
-#         self.failure_count = 0
-#         if self.proxy_node:
-#             start_new_thread(self.waitProxyServer, ())
+        if not self.ip == "0.0.0.0":
+            logging.debug("start vpn with ip %s" %self.ip)
+            self.vpn.config(self.ip,self.mask)
 
 
     def stop_vpn(self):
@@ -238,23 +233,25 @@ class PPVPN(PPNetApp):
         self.is_running = False
 
     def set_ip(self,ip,mask="255.255.255.0"):
-        ok,_ = self._verify_ip(self.station.node_id, ip_stoi(ip))
+        ok,_ = self._verify_ip(self.station.node_id, ip)
         if ok:
-            self.ip = ip_stoi(ip)
+            self.ip = ip
             self.mask = mask
         else:
             return
-        logging.info("%d  set ip %d"%(self.station.node_id,self.ip))
-        if self.ip:
+        logging.info("%d  set ip %s"%(self.station.node_id,self.ip))
+        if not self.ip=="0.0.0.0" :
+            self.is_running = True
             self._setARP(self.station.node_id, self.ip)
-            self.arp_cast(self.station.node_id, self.ip)
+            self.arp_cast()
             if self.vpn:
                 self.vpn.config(ip,mask)
+        else:
+            self.is_running = False
 
                 
-    def _connect(self,sip):
-        ip = ip_stoi(sip)
-        if not (self.ip_range["start"] <= ip <= self.ip_range["end"]):
+    def _connect(self,ip):
+        if not (ip_stoi(self.ip_range["start"]) <= ip_stoi(ip) <= ip_stoi(self.ip_range["end"])):
 #             logging.debug("not valid vlan ip start %s %d"%(self.ip_range,ip))
             return 
         if ip not in self.vlan_table:
@@ -298,8 +295,8 @@ class PPVPN(PPNetApp):
         return False    
 
     def _getFreeIP(self):
-        for ip in range(self.ip_range["start"],self.ip_range["end"]):
-            if ip not in self.vlan_table:
+        for ip in range(ip_stoi(self.ip_range["start"]),ip_stoi(self.ip_range["end"])):
+            if ip_itos(ip) not in self.vlan_table:
                 return ip
             if int(time.time()) > self.vlan_table[ip].expire:
                 return ip 
@@ -346,17 +343,17 @@ class PPVPN(PPNetApp):
         return True                
 
     
-    def arp_cast(self,node_id,ip):
+    def arp_cast(self):
         for ip in self.vlan_table:
             self.arp_res(self.vlan_table[ip].node_id,self.ip)
             
     def _confirm(self,vpn_msg):
-        ip = vpn_msg.get_parameter("ip")
+        ip = ip_itos(vpn_msg.get_parameter("ip"))
         node_id = vpn_msg.get_parameter("node_id")
         if node_id == self.station.node_id:
-            self.set_ip(ip_itos(ip))
+            self.set_ip(ip)
         elif ip:
-            ok,suggest_ip = self._verify_ip(node_id, ip)
+            ok,suggest_ip = self._verify_ip(node_id,ip)
             if ok:
                 if self._setARP(node_id,ip):
 #                     self._lan_cast(vpn_msg)
@@ -372,14 +369,14 @@ class PPVPN(PPNetApp):
                         "node_id":self.station.node_id,
                         "token":self._getToken(self.station.node_id,seed),
                         "vlan_id":self.vlan_id,
-                        "ip":self.ip,
+                        "ip":ip_stoi(self.ip),
                         "seed":seed}}
         logging.debug(dictdata)
         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))        
 
     def ip_res(self,node_id,ip):
         result_ip = 0
-        if ip:
+        if not ip == "0.0.0.0":
             _,result_ip = self._verify_ip(node_id, ip)
         else:
             #get max 
@@ -392,7 +389,7 @@ class PPVPN(PPNetApp):
                         "node_id":node_id,
                         "token":self._getToken(node_id,seed),
                         "vlan_id":self.vlan_id,
-                        "ip":result_ip,
+                        "ip":ip_stoi(result_ip),
                         "seed":seed}}
         logging.debug("set %d ip %s"%(node_id,result_ip))
         if result_ip:
@@ -409,7 +406,7 @@ class PPVPN(PPNetApp):
                         "node_id":self.station.node_id,
                         "token":self._getToken(self.station.node_id,seed),
                         "vlan_id":self.vlan_id,
-                        "ip":ip,
+                        "ip":ip_stoi(ip),
                         "seed":seed}}
         self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata)) 
            
@@ -421,7 +418,7 @@ class PPVPN(PPNetApp):
                         "node_id":self.station.node_id,
                         "token":self._getToken(self.station.node_id,seed),
                         "vlan_id":self.vlan_id,
-                        "ip":ip,
+                        "ip":ip_stoi(ip),
                         "seed":seed}}
         self.send_msg(req_node_id,PPVPN.VPNMessage(dictdata=dictdata))       
 
@@ -440,7 +437,7 @@ class PPVPN(PPNetApp):
                       "session_src":session[0],
                       "session_dst":session[1],
                       "session_id":session[2],
-                      "ip":ip}}
+                      "ip":ip_stoi(ip)}}
         logging.debug(dictdata)
         self.send_msg(session[1], PPVPN.VPNMessage(dictdata=dictdata))
         return
@@ -451,7 +448,7 @@ class PPVPN(PPNetApp):
                       "session_src":session[0],
                       "session_dst":session[1],
                       "session_id":session[2],
-                      "ip":ip}}
+                      "ip":ip_stoi(ip)}}
         logging.debug(dictdata)
         self.send_msg(session[0], PPVPN.VPNMessage(dictdata=dictdata))
         return
@@ -466,14 +463,14 @@ class PPVPN(PPNetApp):
         node_id = ppmsg.get("src_id")
         if command == "ip_req":
             if self._verify_msg(vpn_msg):
-                self.ip_res(node_id,vpn_msg.get_parameter("ip"))
+                self.ip_res(node_id,ip_itos(vpn_msg.get_parameter("ip")))
         if command in ( "ip_res","arp_res"):
             if self._verify_msg(vpn_msg):
                 self._confirm(vpn_msg)
         if command == "arp_req":
             if self._verify_msg(vpn_msg):
-                if vpn_msg.get_parameter("ip") == self.ip:
-                    self.arp_res(vpn_msg.get_parameter("node_id"),vpn_msg.get_parameter("ip"))
+                if ip_itos(vpn_msg.get_parameter("ip")) == self.ip:
+                    self.arp_res(vpn_msg.get_parameter("node_id"),ip_itos(vpn_msg.get_parameter("ip")))
                 else:
                     self._lan_forward(ppmsg)
   
@@ -486,7 +483,6 @@ class PPVPN(PPNetApp):
         if command == "connect_req":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
                 self.vpn.set_peersock(ip_itos(vpn_msg.get_parameter("ip")),self.station.flow.pop_session(session))
-                
             self.connect_res(session,self.ip)
         if command == "connect_res":
             if session in self.station.flow.sessions and self.station.flow.sessions[session][0]:
@@ -500,7 +496,7 @@ class PPVPN(PPNetApp):
         if cmd[0] in ["stat","vpn"]:
             if cmd[0] =="stat":
                 print("vpn %s ip: %s"%("is runing " if self.vpn and not self.vpn.quitting else "not run",
-                                       ip_itos(self.ip)))
+                                       self.ip))
             if cmd[0] =="vpn" and len(cmd)>=3  and cmd[1]=="ip":
                 print("vpn ip set to %s "%(cmd[1]))
                 self.set_ip(cmd[2])
@@ -510,7 +506,7 @@ class PPVPN(PPNetApp):
                 time.sleep(1)
                 self.run_command("vpn detail")
             if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="arp":
-                self.arp_req(ip_stoi(cmd[2]))
+                self.arp_req(cmd[2])
                 time.sleep(1)
                 print(self.vlan_table) 
             if cmd[0] =="vpn" and len(cmd)>=3 and cmd[1]=="connect":
@@ -520,7 +516,7 @@ class PPVPN(PPNetApp):
                 self.run_command("vpn detail")              
             if cmd[0] =="vpn" and len(cmd)>=2  and cmd[1]=="detail":
                 print("vpn %d %s ip: %s"%(self.vlan_id, "is runing " if self.vpn and not self.vpn.quitting else "not run",
-                                       ip_itos(self.ip)))                
+                                       self.ip))                
                 print(self.vlan_table)
                 if self.vpn:
                     print(self.vpn.peer_sock)
@@ -601,7 +597,7 @@ class TestVPN(unittest.TestCase):
         pass
 
     @unittest.skip("command only")
-    def testAuth(self):
+    def testIPReq(self):
         self.vpnA.start()
         self.vpnB.start()
         time.sleep(3)
@@ -614,10 +610,10 @@ class TestVPN(unittest.TestCase):
         self.vpnA.start()
         self.vpnB.start()
         time.sleep(1)
-        self.vpnA.ip = ip_stoi("192.168.33.10")
+        self.vpnA.ip = "192.168.33.10"
 #         self.vpnA.vlan_table[self.vpnB.ip]=()
 #         self.vpnA.start_vpn()
-        self.vpnB.ip = ip_stoi("192.168.33.12")
+        self.vpnB.ip = "192.168.33.12"
 #         self.vpnB.start_vpn()
         self.vpnA.arp_req(self.vpnB.ip)
         print(self.vpnA.vlan_table)
@@ -630,8 +626,8 @@ class TestVPN(unittest.TestCase):
         self.vpnA.start()
         self.vpnB.start()
         time.sleep(1)
-        self.vpnA.ip = ip_stoi("192.168.33.10")
-        self.vpnB.ip = ip_stoi("192.168.33.12")
+        self.vpnA.ip = "192.168.33.10"
+        self.vpnB.ip = "192.168.33.12"
         self.vpnA.arp_req(self.vpnB.ip)
         print(self.vpnA.vlan_table)
         time.sleep(1)
