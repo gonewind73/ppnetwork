@@ -386,8 +386,8 @@ class PPVPN(PPNetApp):
                         "seed":seed}}
         logging.debug("set %d ip %s"%(node_id,result_ip))
         if result_ip:
+            self._setARP(node_id,result_ip)            
             self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
-            self._setARP(node_id,result_ip)
             self.arp_res(node_id, self.ip)      # tell peer self arp      
 #         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 

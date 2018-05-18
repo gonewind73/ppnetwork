@@ -389,12 +389,12 @@ class Flow(PPNetApp):
     
     def run_command(self, command_string):
         cmd = command_string.split(" ")
-        if cmd[0] in ["stat","try","set","flow"]:
+        if cmd[0] in ["stat","set","flow"]:
             if cmd[0] =="stat":
                 print("flow listen on port %d  (%d) %s"%(self.data_port,
                                                     self.count,
                                                     self.external_addr if self.external_addr else "None"))
-            if cmd[0] =="try" and len(cmd)>=1:
+            if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="self":
                 self.get_self_addr()    
             if cmd[0] =="set" and len(cmd)>=4 and cmd[1] =="external":
                 self.external_addr = (cmd[2],int(cmd[3]))   
