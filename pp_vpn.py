@@ -392,7 +392,7 @@ class PPVPN(PPNetApp):
             self._setARP(node_id,result_ip)            
 #             self._lan_cast(PPVPN.VPNMessage(dictdata=dictdata))
             self.arp_res(node_id, self.ip)      # tell peer self arp      
-#         self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
+            self.send_msg(node_id, PPVPN.VPNMessage(dictdata=dictdata))
 
     def arp_req(self,ip):
 #         seed = random.randint(0,0xffffffff)
