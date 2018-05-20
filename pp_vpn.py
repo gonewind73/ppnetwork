@@ -145,7 +145,7 @@ class VPNBase(object):
     def receive_peer(self,ip,peer_sock):
         while not self.quitting:
             try:
-                data = peer_sock.recv(1024)
+                data = peer_sock.recv(1522)
                 # logging.debug("receive %s"%''.join('{:02x} '.format(x) for x in data))
                 if data :
                     n= self.tun.write(data)
