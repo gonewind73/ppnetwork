@@ -9,7 +9,8 @@ from pp_control import PPNetApp, FakeAppNet , Beater, PPStation,Session
 import socket
 import logging
 from _thread import start_new_thread
-from pp_link import PP_APPID, set_debug, NAT_TYPE, BroadCastId, PPMessage
+from pp_link import PP_APPID, set_debug, NAT_TYPE, BroadCastId, PPMessage,\
+    do_wait
 import struct
 import time
 import threading
@@ -356,13 +357,17 @@ class Flow(PPNetApp):
 #             logging.debug(self.exchange_nodes)
             return self.exchange_nodes[peer_id]
         self.exchange_nodes[peer_id] = None
-        self.send_msg(peer_id, self.addr_info(cmd = "addr_req"))
-        try_count = 0
-        while not self.exchange_nodes[peer_id] and try_count<3:
-            time.sleep(1)
-            try_count += 1
-        if try_count==3:
-#             self.exchange_nodes.pop(peer_id)
+        if not do_wait(func =lambda :  self.send_msg(peer_id, self.addr_info(cmd = "addr_req")),
+                     test_func = lambda: self.exchange_nodes[peer_id],
+                     times = 3):
+#         self.send_msg(peer_id, self.addr_info(cmd = "addr_req"))
+#         
+#         try_count = 0
+#         while not self.exchange_nodes[peer_id] and try_count<3:
+#             time.sleep(1)
+#             try_count += 1
+#         if try_count==3:
+# #             self.exchange_nodes.pop(peer_id)
             logging.warning("get %d address error %s "%(peer_id,self.exchange_nodes))
             return None
 #         logging.debug(self.exchange_nodes)
@@ -407,6 +412,8 @@ class Flow(PPNetApp):
             if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="reset":
                 self.exchange_nodes = {}
                 self.sessions ={}       
+            if cmd[0] =="flow" and len(cmd)>=3 and cmd[1] =="arp":
+                self.get_addr(int(cmd[2]))
             if cmd[0] =="flow" and len(cmd)>=3 and cmd[1] =="connect":
                 session = self.connect(int(cmd[2]))
                 if session and session in self.sessions:

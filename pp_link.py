@@ -67,9 +67,9 @@ def do_wait(func,test_func,times):
         func()  
         time.sleep(1)
         if test_func():
-            return 
+            return True
         count +=1      
-    return 
+    return False
 
 def ip_stoi(ip):
     return socket.ntohl(struct.unpack("I", socket.inet_aton(ip))[0])
