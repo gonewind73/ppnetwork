@@ -97,7 +97,7 @@ class VPNBase(object):
         if not self.ip == "0.0.0.0":
             self.tun.config(self.ip,self.mask)
             start_new_thread(self.listen, ())
-            print("vpn start")
+            print("vpn start with ip %s"%self.ip)
 
     def get_dst(self,data):
         return socket.inet_ntoa(data[16:20])
@@ -218,15 +218,14 @@ class PPVPN(PPNetApp):
         if self.vpn:
             if not self.vpn.quitting:
                 self.vpn.quit()
+        logging.debug("%d init vpn with ip %s" %(self.station.node_id,self.ip))
         self.vpn = VPNBase()
         self.vpn.connect = self._connect
         if not self.testing:
             self.vpn.start()
         if not self.ip == "0.0.0.0":
-            logging.debug("start vpn with ip %s" %self.ip)
-            self.vpn.config(self.ip,self.mask)
-
-
+            self.set_ip(self.ip, self.mask)
+ 
     def stop_vpn(self):
         if self.vpn:
             self.vpn.quit()
@@ -239,7 +238,7 @@ class PPVPN(PPNetApp):
             self.mask = mask
         else:
             return
-        logging.info("%d  set ip %s"%(self.station.node_id,self.ip))
+        logging.info("%d  set vpn ip %s"%(self.station.node_id,self.ip))
         if not self.ip=="0.0.0.0" :
             self.is_running = True
             self._setARP(self.station.node_id, self.ip)
