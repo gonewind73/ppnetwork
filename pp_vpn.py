@@ -132,7 +132,7 @@ class VPNBase(object):
                             self.set_peersock(dst_ip,sock)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
-                    if data[9] == 0x06:
+#                     if data[9] == 0x06:
 #                         logging.debug("send %d \n%s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
             except OSError as exps:
                 logging.warning(exps)
