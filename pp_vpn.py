@@ -133,7 +133,7 @@ class VPNBase(object):
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
                     if data[9] == 0x06:
-                        logging.debug("send %d \n%s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
+#                         logging.debug("send %d \n%s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
             except OSError as exps:
                 logging.warning(exps)
                 break
@@ -149,7 +149,7 @@ class VPNBase(object):
                 # logging.debug("receive %s"%''.join('{:02x} '.format(x) for x in data))
                 if data :
                     n= self.tun.write(data)
-                    logging.debug("write %d %d \n %s"%(n,len(data),''.join('{:02x} '.format(x) for x in data)))
+#                     logging.debug("write %d %d \n %s"%(n,len(data),''.join('{:02x} '.format(x) for x in data)))
                 else:
                     continue
             except socket.timeout:
