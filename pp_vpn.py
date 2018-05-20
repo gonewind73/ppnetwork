@@ -149,7 +149,7 @@ class VPNBase(object):
                 # logging.debug("receive %s"%''.join('{:02x} '.format(x) for x in data))
                 if data :
                     n= self.tun.write(data)
-                    # logging.debug("write %d %d"%(n,len(data)))
+                    logging.debug("write %d %d \n %s"%(n,len(data),''.join('{:02x} '.format(x) for x in data)))
                 else:
                     continue
             except socket.timeout:
