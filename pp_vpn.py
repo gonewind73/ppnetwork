@@ -92,6 +92,8 @@ class VPNBase(object):
         logging.info("vpn quit!")
     
     def config(self,ip,mask):
+        if (ip,mask) == (self.ip,self.mask):
+            return 
         self.ip=ip
         self.mask = mask
         if not self.ip == "0.0.0.0":
