@@ -95,7 +95,8 @@ if __name__ == "__main__":
     else:
         config = yaml.load(open(opt.config_file))
         set_debug(config.get("DebugLevel", logging.WARNING),
-                    config.get("DebugFile", ""))
-    #             config.get("DebugFile", ""),filter=lambda record: record.filename =="pp_flow.py" or record.filename =="pp_vpn.py")
+                    config.get("DebugFile", ""),
+                    debug_filter=lambda record: record.filename =="pp_flow.py" or record.filename =="pp_vpn.py" or record.levelno>logging.DEBUG,
+                )
         main(config=config)
     
