@@ -41,7 +41,7 @@ class Flow(PPNetApp):
     
     class DataMessage(PPNetApp.AppMessage):
         def __init__(self,**kwargs):
-            tags_id={"addr_req":1,"addr_res":2,"connect_req":20,"connect_res":21,
+            tags_id={"addr_req":1,"addr_res":2,"connect_req":20,"connect_res":21,"disconnect":22,
                      "ip":3,"port":4,"peer_ip":5,"peer_port":6,"node_id":7,
                      "session_src":11,"session_dst":12,"session_id":13}
             parameter_type = {3:"str",4:"I",5:"str",6:"I",7:"I",
@@ -245,6 +245,18 @@ class Flow(PPNetApp):
         self.send_msg(peer_id, Flow.DataMessage(dictdata=dictdata))
         
         return
+    
+    def req_disconnect(self,dst_id,session):
+        dictdata = {"command":"connect_req",
+                    "parameters":{
+                      "node_id":dst_id,
+                      "session_src":session[0],
+                      "session_dst":session[1],
+                      "session_id":session[2]}}
+        logging.debug(dictdata)
+        self.send_msg(dst_id, Flow.DataMessage(dictdata=dictdata))
+        
+        return    
         
     def connect(self,peer_id,session=None,isResponse=False):
         if peer_id in self.station.peers:
@@ -301,7 +313,7 @@ class Flow(PPNetApp):
         else:
             return None  
 
-    def exchange(self,client_socket,remote_socket):
+    def exchange(self,client_socket,remote_socket,session=None):
         self.count += 1
         while True:
             end = False
@@ -332,12 +344,14 @@ class Flow(PPNetApp):
                                 logging.warning(exp.__str__())
                                 end = True
             if end:
+                self.count -= 1
                 try:
-                    self.count -= 1
                     client_socket.close()
+                except:
+                    pass
+                try:
                     remote_socket.close()
-                except Exception as exp:
-                    logging.warning(exp.__str__())
+                except :
                     pass
                 break   
              
