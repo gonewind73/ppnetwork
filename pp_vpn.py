@@ -121,16 +121,19 @@ class VPNBase(object):
             try:
                 data = self.tun.read()
                 if data:
-#                     logging.debug("rev %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
-                    dst_ip = self.get_dst(data)
+                    if not data[0]&0xf0 ==0x40:
+                        continue
+                    dst_ip = self.get_dst(data)                    
+#                     logging.debug("rev %d %s \n%s"%(len(data),dst_ip,''.join('{:02x} '.format(x) for x in data)))
+
                     if dst_ip not in self.peer_sock:
                         sock = self.connect(dst_ip)
                         if sock:
                             self.set_peersock(dst_ip,sock)
                     if dst_ip in self.peer_sock and self.peer_sock[dst_ip]:
                         self.peer_sock[dst_ip].sendall(data)
-                    if dst_ip == "192.168.33.2":
-                        logging.debug("send %d %s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
+                    if data[9] == 0x06:
+                        logging.debug("send %d \n%s"%(len(data),''.join('{:02x} '.format(x) for x in data)))
             except OSError as exps:
                 logging.warning(exps)
                 break
