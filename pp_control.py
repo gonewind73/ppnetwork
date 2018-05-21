@@ -1333,6 +1333,29 @@ class PPStation(PPLinker):
                 return 0
             print("can't communicate to %s" % peer_id)
             return 0
+
+    def forward_ppmsg(self, peer_id, pp_msg ):
+        '''
+        w ttl 减一
+        
+        '''
+        ttl = pp_msg.get("ttl")
+        if ttl == 0:
+            return
+        if peer_id == BroadCastId:  # broadcast
+            for peerid in self.peers:
+                if self.peers[peerid].status:  # check_turnable():
+                    pp_msg.set("ttl",ttl)
+                    self.forward_ppmsg(peerid, pp_msg)
+        else:  # unicast
+            if peer_id in self.peers:
+                peer = self.peers[peer_id]
+                pp_msg.set("ttl",ttl-1)
+                return self.send_ppmsg(peer, pp_msg)
+            if peer_id == self.node_id:
+                return 0
+            print("can't communicate to %s" % peer_id)
+            return 0        
     
     def process_msg(self, ppmsg, addr):
         
@@ -1355,8 +1378,10 @@ class PPStation(PPLinker):
             
             if process :  # and sequence > self.peers[src_id].rx_sequence:
                 process(ppmsg, addr)     
-            else:
-                logging.warning("%s no process seting for %s"%(self.node_id,ppmsg.get("app_id")))
+#             else:
+#                 logging.warning("%s no process seting for %s"%(self.node_id,ppmsg.get("app_id")))
+            else:  #if dst_id == BroadCastId:  #unknown app,just forward to peers ,try forward to dst_id
+                self.forward_ppmsg(dst_id, ppmsg)
 
         else:
             if dst_id in self.peers:
