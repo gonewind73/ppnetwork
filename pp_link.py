@@ -847,12 +847,7 @@ class PPLinker(PPNode):
             subprocess.getstatusoutput('netsh interface set interface "' + nic + '" enabled')
         pass
 
-    def publish(self):
-        # send self info to web directory
-        if  self.nat_type== NAT_TYPE["Turnable"] :  # ChangedAddressError:  #must
-            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1],  "node_id":self.node_id}
-            requests.post("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
-        pass
+
 
     def send_ppmsg(self, peer, ppmsg, need_ack=False):
         '''

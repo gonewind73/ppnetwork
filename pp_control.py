@@ -901,7 +901,7 @@ class Beater(PPNetApp):
                 self.station.distance = 1 
             logging.info("set self %d nattype to %s from peer!" %(self.station.node_id, NAT_STRING[self.station.nat_type]))
             self.station.status = True
-            self.station.publish()
+            start_new_thread(self.station.publish,())
             self.station.last_beat_addr = addr
             logging.info("%s connect to the world." % self.station.node_id)
         else:
@@ -1249,6 +1249,13 @@ class PPStation(PPLinker):
             if (self.peers[peer_id].ip,self.peers[peer_id].port) == addr and self.peers[peer_id].distance==1:
                 return peer_id
         return 0
+    
+    def publish(self):
+        # send self info to web directory
+        if  self.nat_type== NAT_TYPE["Turnable"] :  # ChangedAddressError:  #must
+            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1],  "node_id":self.node_id}
+            requests.post("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
+        pass
     
     def get_peers_online(self):
 #         socket.setdefaulttimeout(2)
