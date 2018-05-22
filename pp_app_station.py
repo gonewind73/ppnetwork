@@ -11,15 +11,14 @@ import logging
 from pp_link import set_debug
 import yaml
 import time
-from pp_vpn import PPVPN
+from pp_vpn import PPVPN, TestVPN
 import optparse
-from email.policy import default
 
 
 class PPAppStation(PPStation):
     def __init__(self,config):
         super().__init__(config) 
-        self.flow = Flow(station=self,data_port=config.get("data_port",7070))
+        self.flow = Flow(station=self,config=config.get("flow",{}))
         self.services.update({"flow":self.flow})
         
         if "services" in self.config:
@@ -72,19 +71,6 @@ def main(config):
 
     print("PPAppStation Quit!")    
 
-class Test(unittest.TestCase):
-
-
-    def setUp(self):
-        pass
-
-
-    def tearDown(self):
-        pass
-
-
-    def testName(self):
-        pass
 
 
 if __name__ == "__main__":

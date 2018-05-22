@@ -5,11 +5,11 @@ Created on 2018年4月5日
 @author: heguofeng
 '''
 import unittest
-from pp_control import PPNetApp, FakeAppNet , Beater, PPStation,Session
+from pp_control import PPNetApp,  Beater
 import socket
 import logging
 from _thread import start_new_thread
-from pp_link import PP_APPID, set_debug, NAT_TYPE, BroadCastId, PPMessage,\
+from pp_link import PP_APPID,  NAT_TYPE,  PPMessage,\
     do_wait
 import struct
 import time
@@ -51,7 +51,7 @@ class Flow(PPNetApp):
 #                              tags_string=tags_string,
                             parameter_type=parameter_type,**kwargs)
                 
-    def __init__(self,station,data_port,session_limit=1000):
+    def __init__(self,station,config):
         '''
         [client_sock,remote_sock,failurecount,client_sock_type,remote_sock_type]
         sock_type  means terminal sock or exchange_sock. terminal sock no need ack
@@ -61,9 +61,10 @@ class Flow(PPNetApp):
         self.sessions = {}  # {(src_id,dst_id,session_id):[client_sock,need-ack ,failurecount]}
         self.session_id = 0
         self.external_addr = None
-        self.data_port = data_port
-        self.local_addr = ("0.0.0.0",self.data_port)
-        self.session_limit = session_limit
+        self.flow_port = config.get("flow_port",7000)
+        self.session_limit = config.get("session_limit",1000)
+        self.local_addr = ("0.0.0.0",self.flow_port)
+        
         self.quitting = False
         self.timer = None
         self.servsock = None
@@ -81,8 +82,8 @@ class Flow(PPNetApp):
 
         self.quitting = False
         self.count = 0
-        self.servsock = prepare_socket(timeout=0,port=self.data_port)
-        logging.info("datalayer: --> %s:%d -->" % ('0.0.0.0',self.data_port))        
+        self.servsock = prepare_socket(timeout=0,port=self.flow_port)
+        logging.info("datalayer: --> %s:%d -->" % ('0.0.0.0',self.flow_port))        
         self.servsock.listen(self.session_limit)
         start_new_thread(self.listen, ())
         start_new_thread(self.check, ())
@@ -122,7 +123,7 @@ class Flow(PPNetApp):
         '''
         logging.debug("datalayer beat null")
         try:
-            sock = prepare_socket(timeout=1,port=self.data_port)
+            sock = prepare_socket(timeout=1,port=self.flow_port)
             sock.connect((socket.inet_ntoa(struct.pack('I', socket.htonl(random.randint(1677721600, 1694498816)))),
                                 random.randint(10000, 60000)))
         except socket.timeout:
@@ -132,15 +133,15 @@ class Flow(PPNetApp):
             pass   
 
     def get_self_addr(self,):
-        local_addr,external_addr = self.station.get_addr(self.data_port)
+        local_addr,external_addr = self.station.get_addr(self.flow_port)
         if external_addr:
             self.external_addr = external_addr
             self.local_addr = local_addr
             logging.info("get self external_addr %s:%d"%self.external_addr)
         else:
             if self.station.status and self.station.nat_type==NAT_TYPE["Turnable"]:
-                self.external_addr = (self.station.ip,self.data_port)
-                self.local_addr = (self.station.local_addr[0],self.data_port)
+                self.external_addr = (self.station.ip,self.flow_port)
+                self.local_addr = (self.station.local_addr[0],self.flow_port)
                 logging.info("get self external_addr %s:%d by guess"%self.external_addr)
             else:
                 logging.error("can't get external address,quit")                
@@ -357,7 +358,7 @@ class Flow(PPNetApp):
              
     def addr_info(self,cmd = "addr_req"):
         ip = self.external_addr[0] if self.external_addr else self.station.ip
-        port = self.external_addr[1] if self.external_addr else self.data_port
+        port = self.external_addr[1] if self.external_addr else self.flow_port
         dictdata = {"command":cmd,
                     "parameters":{
                                   "ip":ip,
@@ -410,7 +411,7 @@ class Flow(PPNetApp):
         cmd = command_string.split(" ")
         if cmd[0] in ["stat","set","flow"]:
             if cmd[0] =="stat":
-                print("flow listen on port %d  (%d) %s"%(self.data_port,
+                print("flow listen on port %d  (%d) %s"%(self.flow_port,
                                                     self.count,
                                                     self.external_addr if self.external_addr else "None"))
             if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="self":
@@ -418,7 +419,7 @@ class Flow(PPNetApp):
             if cmd[0] =="set" and len(cmd)>=4 and cmd[1] =="external":
                 self.external_addr = (cmd[2],int(cmd[3]))   
             if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="show":
-                print("flow listen on port %d  (%d) %s"%(self.data_port,
+                print("flow listen on port %d  (%d) %s"%(self.flow_port,
                                                     self.count,
                                                     self.external_addr if self.external_addr else "None"))
             if cmd[0] =="flow" and len(cmd)>=2 and cmd[1] =="detail":
@@ -438,120 +439,7 @@ class Flow(PPNetApp):
             return True
         return False      
     
-pseudo_sockets= {}    
-class PseudoSock(object):
-        def __init__(self,addr,peer=None):
-            logging.debug("pseudo socket init")
-            self.addr = addr
-            self.peer = peer
-            self.peers = {}
-            self.buffer=[]
-            pass
-        
-        def listen(self):
-            pseudo_sockets[self.addr] = self
-            
-        
-        def connect(self,addr):
-            count = 0
-            while  count <10 :
-                if addr in pseudo_sockets:
-                    pseudo_sockets[addr].peers.update({self.addr:self})
-                    self.peers.update({addr:pseudo_sockets[addr]})
-                    return self
-                count+=1
-                time.sleep(1)
-            return None
-            
-        
-        def accept(self):
-            while self.peers:
-                client_addr,client_sock = self.pop(0)
-            return client_sock,client_addr    
-        
-        def send(self,data):
-            list(self.peers.values())[0].buffer.append(data)
-            pass
-        
-        def receive(self):
-            count = 0
-            while  count<10:
-                if self.buffer:
-                    return self.buffer.pop(0)
-                count+=1
-                time.sleep(1)
-            return None
-        
-        @staticmethod
-        def prepare_socket(timeout=10,ip="0.0.0.0",port=0):
-            return PseudoSock((ip,port),None)
 
-class Test(unittest.TestCase):
-
-    def setUp(self):
-        set_debug(logging.DEBUG, "")
-        self.nodes = {100: { "node_id": 100,"ip": "180.153.152.193", "port": 54330,"secret": "",},
-             201: { "node_id": 201,"ip": "116.153.152.193", "port": 54330, "secret": "",},
-             202:  { "node_id": 202,"ip": "116.153.152.193", "port": 54320,"secret": "",}}
-        config={"node_ip":"180.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"],
-                "nodes":self.nodes}
-        config.update({'node_id':100,"node_ip":"180.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]})
-        self.stationA = FakeAppNet(config)
-        config.update({'node_id':201,"node_ip":"116.153.152.193","node_port":54330, "nat_type":NAT_TYPE["Turnable"]})
-        self.stationB = FakeAppNet(config)
-        
-#         processes = {100:self.stationB.process,
-#                      200:self.stationA.process}
-#         self.stationA.set_process(processes)
-#         self.stationB.set_process(processes)           
-        pass
-
-    def tearDown(self):
-
-        pass
-    def TtestSession(self):
-        receive_buffer = ""
-        send_buffer = ""
-        def receive_process(session,data):
-            nonlocal receive_buffer
-            receive_buffer += data
-        def send_process(session,data):
-#             nonlocal send_buffer
-#             send_buffer += data
-            print(session,data)
-            
-        s = Session(send_process=send_process,
-                          receive_process=receive_process)
-        for i in range(10):
-            session={"id":100,"size":0,"start":i,"end":i+1}
-            print(s.send(session,str(i)))
-            rsession={"id":100,"size":0,"start":9-i,"end":9-i+1}
-            print(s.receive(rsession, str(9-i)))
-        session={"id":100,"size":10,"start":10,"end":10}
-        print(s.send(session, "end"))
-        print(s.receive(session, "end"))
-        print(send_buffer,receive_buffer)
-        self.assertEqual(receive_buffer, "0123456789", "test session")
-        self.assertEqual(s.receive_size, 10, "test session")
-        self.assertEqual(s.send_size, 10, "test session")
-
-        
-    def testFlow(self):
-        prepare_socket = PseudoSock.prepare_socket
-        self.client = Flow(self.stationA,data_port=7200)
-        self.server = Flow(self.stationB,data_port=7300)
-        processes = {100:self.client.process,
-                     201:self.server.process}
-        self.stationA.set_process(processes)
-        self.stationB.set_process(processes)          
-        self.client.start()
-        self.server.start()
-        time.sleep(30)
-        session = self.client.connect(201, session=None)
-        print(session,self.client.sessions)
-        self.client.quit()
-        self.server.quit()
-        
         
 
 if __name__ == "__main__":

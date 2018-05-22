@@ -13,7 +13,6 @@ import socket
 import sys
 import time
 from pp_flow import prepare_socket, Flow
-import random
 import hashlib
 import struct
 from collections import namedtuple
@@ -190,12 +189,13 @@ class PPVPN(PPNetApp):
     def __init__(self,station,config):
         
         super().__init__(station=station,app_id= PP_APPID["VPN"] )
-        self.vlan_id = config.get("Vlan",0)
+        self.vlan_id = config["Vlan"]
+        self.secret = config["VlanSecret"].encode()        
         self.ip_range = config.get("IPRange",{"start":"192.168.33.1","end":"192.168.33.255"})
 #         self.ip_range = {"start":ip_stoi(ip_range["start"]),"end":ip_stoi(ip_range["end"])}
         self.ip = config.get("VlanIP","0.0.0.0")
         self.mask = config.get("VlanMask","255.255.255.0")
-        self.secret = config.get("VlanSecret","12345678").encode()
+
         self.is_running = False
         self.vlan_table = {}  #{ip:(node_id,last_active)
         self.vpn = None
@@ -560,9 +560,9 @@ class TestVPN(unittest.TestCase):
         self.stationA = PPStation(configA) 
         self.stationB = PPStation(configB)
         self.stationC = PPStation(configC)
-        self.stationA.flow = Flow(station=self.stationA,data_port=7070)
+        self.stationA.flow = Flow(station=self.stationA,config={"flow_port":7070})
         self.stationA.services.update({"flow":self.stationA.flow})
-        self.stationB.flow = Flow(station=self.stationB,data_port=7071)
+        self.stationB.flow = Flow(station=self.stationB,config={"flow_port":7071})
         self.stationB.services.update({"flow":self.stationB.flow})
         
         self.fake_net = FakeNet()

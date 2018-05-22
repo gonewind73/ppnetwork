@@ -9,7 +9,6 @@ todo:
 用dh 交换，加密
 
 '''
-import unittest
 import time
 import socket
 
@@ -18,9 +17,7 @@ import struct
 from _thread import start_new_thread
 
 import logging
-import random
 import subprocess
-import requests
 import os
 
 def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:True):
@@ -43,24 +40,6 @@ def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:
                 handlers = [console,]
                 )
 
-def wait_available(datadict,item,times):
-    count  = 0
-    while count<times:
-        if item in datadict:
-            return datadict[item]
-        time.sleep(1)
-        count +=1        
-    return None
-
-def wait_result(item,result,times):
-    count  = 0
-    while count<times:
-        if item == result:
-            return item
-        time.sleep(1)
-        count +=1        
-    return item
-
 def do_wait(func,test_func,times):
     count  = 0
     while count<times:
@@ -70,6 +49,33 @@ def do_wait(func,test_func,times):
             return True
         count +=1      
     return False
+
+def wait_available(datadict,item,times):
+    if do_wait(lambda: True, lambda : item in datadict, times):
+        return datadict[item]
+    else:
+        return None
+#     count  = 0
+#     while count<times:
+#         if item in datadict:
+#             return datadict[item]
+#         time.sleep(1)
+#         count +=1        
+#     return None
+
+def wait_result(item,result,times):
+    if do_wait(lambda:True,lambda : item==result, times):
+        return item
+#     
+#     count  = 0
+#     while count<times:
+#         if item == result:
+#             return item
+#         time.sleep(1)
+#         count +=1        
+#     return item
+
+
 
 def ip_stoi(ip):
     return socket.ntohl(struct.unpack("I", socket.inet_aton(ip))[0])
@@ -400,7 +406,7 @@ class PPApp(object):
 
         def load(self, bindata):
             try:
-                command, paralen = struct.unpack("BB", bindata[0:2])
+                command, _ = struct.unpack("BB", bindata[0:2])
                 data_parameters = {}
                 start_pos = 2
                 while start_pos < len(bindata):
@@ -572,12 +578,10 @@ class Receiver(PPApp):
         self.process_msg(ppmsg, addr)
 
     def process_msg(self, ppmsg, addr):
-
         dst_id = ppmsg.get("dst_id")            
         if dst_id == self.station.node_id or dst_id == BroadCastId:
             sequence = ppmsg.get("sequence")
             src_id = ppmsg.get("src_id")
-            app_id = ppmsg.get("app_id")
             # 回响应包
             if  ppmsg.get("need_ack")  and not dst_id == BroadCastId:
                 self.station.ackor.send_ack(src_id,sequence,addr)
@@ -686,46 +690,6 @@ class Ackor(PPApp):
             self.timer = threading.Timer(3, self.check_ack)
             self.timer.start()
             self.not_runing = 0
-
-
-# class PPConnection(PPApp):
-#
-#     def __init__(self, station, callback=None):
-#         '''
-#         callback = (action,peer_id,action_content="",error_code=0,error_message="")
-#         '''
-#         super().__init__(station,callback)
-#         self.peer_id = 0
-#
-#     def connect(self, peer_id):
-#         '''
-#         '''
-#         if self.peer_id and not self.peer_id == peer_id:
-#             return None
-#         if not self.peer_id:
-#             if self.callback:
-#                 self.callback("connect", peer_id)
-#         self.peer_id = peer_id
-#
-#         return self
-#
-#     def disconnect(self, peer_id):
-#         '''
-#         '''
-#         self.peer_id = 0
-#         if self.callback:
-#             self.callback("diconnect", peer_id)
-#         return self
-#
-#     def send(self, app_msg, need_ack=False):
-#         if self.peer_id:
-#             self.station.send_msg(self.peer_id, app_msg, need_ack)
-#
-#     def set_app_process(self, app_id, process=None):
-#         self.station.set_app_process(app_id, process)
-#     
-#     def finish(self, action, peer_id, action_content, error_code, error_message):
-#         print("%s with %d done return %d with %s " % (action, peer_id, error_code, error_message))
 
 
 class PPLinker(PPNode):
@@ -941,179 +905,3 @@ if __name__ == '__main__':
     main(config=config)
 
     pass
-
-
-class NAT(object):
-
-    def __init__(self, ip, port, nat_type):
-        self.ip = ip
-        self.port = port
-        self.nat_type = nat_type
-        self.map_table = {}
-        self.idle = 180
-        start_new_thread(self.timer, ())
-
-    def out(self, dest_ip, dst_port):
-        self.idle = 0
-        if self.nat_type == NAT_TYPE["Turnable"]:
-            self.map_table[(dest_ip, dst_port)] = ((self.ip, self.port), 1)
-            return (self.ip, self.port)
-        else:
-            if (dest_ip, dst_port) not in self.map_table:
-                self.map_table[(dest_ip, dst_port)] = ((self.ip, random.randint(10000, 60000)), 1)
-            return self.map_table[(dest_ip, dst_port)][0]
-
-    def in_(self, src_ip, src_port):
-#         print(self.map_table)
-        if self.nat_type == NAT_TYPE["Turnable"]:
-            if self.idle < 180:
-                return src_ip, src_port
-        elif (src_ip, src_port) in self.map_table:
-            return self.map_table[(src_ip, src_port)][0]
-        else:
-            return None, None
-
-    def inaddrs(self):
-        addrs = {}
-        if self.nat_type == NAT_TYPE["Turnable"]:
-            if self.idle < 180:
-#                 print("return self ip",[(self.ip,self.port)])
-                return {(self.ip, self.port):(self.ip, self.port)}
-        else:
-            map_table = self.map_table.copy()
-            for (src_ip, src_port) in list(map_table.keys()):
-                addrs[map_table[(src_ip, src_port)][0]] = (src_ip, src_port)
-            return addrs
-        return addrs
-
-    def timer(self):
-        self.idle += 3
-        for key in list(self.map_table.keys()):
-            self.map_table[key] = (self.map_table[key][0], self.map_table[key][1] + 3)
-            if self.map_table[key][1] > 90:
-                del self.map_table[key]
-        threading.Timer(3, self.timer).start()
-
-
-class FakeNet(object):
-    '''
-    2nd way to simulate,is more lower layer:
-
-        self.fake_net = FakeNet()
-        self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
-        self.stationA.start()
-    '''
-
-    def __init__(self, node_id=0):
-
-        self.buffer = {}
-        start_new_thread(self.timer, ())
-
-    def send(self, addr, data, nat):
-        '''
-        self.stationA.send = lambda peer,data: self.fake_net.send(peer,data,addr)
-        '''
-        outaddr = nat.out(addr[0], addr[1])
-        if addr not in self.buffer:
-            self.buffer[addr] = []
-
-        self.buffer[addr].append(((data, outaddr), int(time.time())))
-#         logging.debug("send %s data %s on %s"%("%s:%d"%addr,data[:2],"%s:%d"%outaddr))
-#         print(self.buffer)
-
-    def receive(self, node_id=0, nat=None):
-        '''
-        self.stationA._receive = lambda : self.fake_net.receive(100)
-        '''
-        dst_addrs = nat.inaddrs()
-        for dst_addr in list(dst_addrs.keys()):
-            if dst_addr in self.buffer and self.buffer[dst_addr]:
-#                 logging.debug("receive:%s %s"%self.buffer[dst_addr][0][0])
-                try:
-                    data, addr = self.buffer[dst_addr].pop(0)[0]
-                    if addr == dst_addrs[dst_addr] or dst_addrs[dst_addr] == dst_addr:
-                        return data, addr
-                    else:
-                        print("drop packet for can't in.")
-                except Exception as exp:
-                    logging.debug(exp)
-                    return None,None
-        return None, None
-
-    def timer(self):
-        now = time.time()
-        for dst_addr in list(self.buffer.keys()):
-            for msg in list(self.buffer[dst_addr]):
-                index = self.buffer[dst_addr].index(msg)
-                if now - self.buffer[dst_addr][index][1] > 20:
-                    del self.buffer[dst_addr][index]
-            if not self.buffer[dst_addr]:
-                del self.buffer[dst_addr]
-        threading.Timer(60, self.timer).start()
-
-    def fake(self,station):
-        nat = NAT(station.ip,station.port,station.nat_type)
-        logging.info("fake %d network %s %d %d"%(station.node_id,station.ip,station.port,station.nat_type))
-        station._send = lambda addr,data: self.send(addr,data,nat)
-        station._receive = lambda : self.receive(station.node_id,nat)
-        return station
-
-
-class LinkerTest(unittest.TestCase):
-    inited = 0
-
-    def start(self):
-        set_debug(logging.DEBUG, "")
-
-        self.stationA = PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}) 
-        self.stationB = PPLinker(config={"node_id":201, "node_ip":"116.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]})
-        self.stationC = PPLinker(config={"node_id":202, "node_ip":"116.153.152.193", "node_port":54320, "nat_type":NAT_TYPE["Turnable"]})
-
-        self.fake_net = FakeNet()
-        self.fake_net.fake(self.stationA)
-        self.fake_net.fake(self.stationB)
-        self.fake_net.fake(self.stationC)     
-        self.inited = 1
-
-    def setUp(self):
-        if self.inited == 0:
-            self.start()
-        pass
-
-    def tearDown(self):
-        pass
-
-    def testPPMessage(self):
-        dictdata={"src_id":12,"dst_id":13,
-                    "app_data":b"app_data",
-                    "app_id":7}
-        ppmsg = PPMessage(dictdata=dictdata)
-        bindata = ppmsg.dump()
-        ppmsg1 = PPMessage(bindata=bindata)
-        self.assertDictContainsSubset(dictdata, ppmsg1.dict_data,"test ppmessage")
-        pass
-
-    def ack_callback(self,peer_id,sequence,status):
-        print(peer_id,sequence,status)
-        self.ackResult = status
-
-    def testAckor(self):
-        self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]},
-                                                                                ack_callback=self.ack_callback ))
-        self.ackResult = False
-        dictdataA={"src_id":100,"dst_id":201,
-                    "app_data":b"app_data",
-                    "app_id":7}
-        self.stationA.start()
-        self.stationB.start()
-        # to have a hole
-        dictdataB={"src_id":201,"dst_id":202,
-                    "app_data":b"app_data",
-                    "app_id":7}
-        self.stationB.send_ppmsg(self.stationC, PPMessage(dictdata=dictdataB))
-        self.stationA.send_ppmsg(self.stationB, PPMessage(dictdata=dictdataA), need_ack=True)
-
-        time.sleep(1)
-        self.assertTrue(self.ackResult, "test Ackor")
-        self.stationA.quit()
-        self.stationB.quit()
