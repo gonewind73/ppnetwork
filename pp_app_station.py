@@ -13,6 +13,7 @@ import yaml
 import time
 from pp_vpn import PPVPN
 import optparse
+from email.policy import default
 
 
 class PPAppStation(PPStation):
@@ -88,7 +89,7 @@ class Test(unittest.TestCase):
 
 if __name__ == "__main__":
     parser = optparse.OptionParser()
-    parser.add_option('--config', default='ppnetwork.yaml',dest='config_file', help='set config file')
+    parser.add_option('--config', default="ppnetwork.yaml", dest='config_file', help='set config file,default is ppnetwork.yaml')
     opt, args = parser.parse_args()
     if not (opt.config_file):
         parser.print_help()

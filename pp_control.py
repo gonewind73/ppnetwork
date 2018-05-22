@@ -1253,22 +1253,15 @@ class PPStation(PPLinker):
     def publish(self):
         # send self info to web directory
         if  self.nat_type== NAT_TYPE["Turnable"] :  # ChangedAddressError:  #must
-            payload = {"nat_type":self.nat_type, "ip":self.external_addr[0], "port":self.external_addr[1],  "node_id":self.node_id}
-            requests.post("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
+            payload = {"ip":self.ip, "port":self.port,  "node_id":self.node_id,"net_id":self.net_id}
+            res = requests.post("http://ppnetwork.pythonanywhere.com/ppnet/public", params=payload)
+            print(res.text)
         pass
     
     def get_peers_online(self):
-#         socket.setdefaulttimeout(2)
-#         natdetector = NATDetector(self.sockfd,self.ip,self.port)
-#         nat_type,self.ip,self.port = natdetector.get_nat_info()
-#         self.nat_type = NATDetector.get_nat_type_id(nat_type)
-#         socket.setdefaulttimeout(None)
-        # get peers from webmaster {node_id:(external_ip,external_port,nat_type)}
-        payload = {"net_id":self.net_id, "node_id":self.node_id}
-        response = requests.get("http://joygame2.pythonanywhere.com/p2pnet/public", params=payload)
+        payload = {"net_id":self.net_id }
+        response = requests.get("http://ppnetwork.pythonanywhere.com/ppnet/public", params=payload)
         peers = json.loads(response.text)
- 
-        # {peer:(external_ip,external_port,nat_type)}
         peernodes = {}
         for peer in peers:
             if not int(peer) == self.node_id and peers[peer][0] and peers[peer][1]:
@@ -1336,7 +1329,7 @@ class PPStation(PPLinker):
 
     def forward_ppmsg(self, peer_id, pp_msg ):
         '''
-        w ttl 减一
+        forward to peer or broadcase ,    ttl 减一
         
         '''
         ttl = pp_msg.get("ttl")
@@ -1487,7 +1480,7 @@ class PPStation(PPLinker):
         return self.get_status(node_id)
     
     def support_commands(self):
-        return ["beat","find","p2p","cast","route","ipport","help","quit","stat","set"]
+        return ["beat","find","p2p","cast","route","ipport","help","quit","stat","set","control"]
     
     def run_command(self,command_string):
         cmd = command_string.split(" ") 
@@ -1516,7 +1509,9 @@ class PPStation(PPLinker):
         elif cmd[0]=="ipport" and len(cmd)>=4:
             self.set_ipport(peer_id=int(cmd[1]), ip= cmd[2],port = int(cmd[3]))            
         elif cmd[0]=="set" and len(cmd)>=3 and cmd[1]=="nattype":
-            self.nat_type = int(cmd[2])                  
+            self.nat_type = int(cmd[2])                
+        elif cmd[0]=="control" and len(cmd)>=2 and cmd[1]=="publish":
+            self.publish()                  
         elif cmd[0]=="stat":
             if len(cmd) == 2:
                 peer_id = int(cmd[1])
@@ -1528,7 +1523,7 @@ class PPStation(PPLinker):
                 self.get_all_nodes(delay=0)
                 print("Services:",self.services.keys())
         elif cmd[0]=="help":
-            response = requests.get("http://joygame2.pythonanywhere.com/ppnet/help.txt")
+            response = requests.get("http://ppnetwork.pythonanywhere.com/ppnet/help.txt")
             print(response.text.encode(response.encoding).decode())      
         elif cmd[0]=="quit":
             self.quit()
