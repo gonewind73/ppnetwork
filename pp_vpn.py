@@ -155,7 +155,8 @@ class VPNBase(object):
             except socket.timeout:
                 continue
             except OSError as exps:
-                self.peer_sock.pop(ip)
+                if ip in self.peer_sock:
+                    self.peer_sock.pop(ip)
                 logging.warning(exps)
                 break
             except Exception as exp:
