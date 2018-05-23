@@ -4,14 +4,13 @@ Created on 2018年4月10日
 
 @author: heguofeng
 '''
-import unittest
 from pp_control import PPStation
 from pp_flow import   Flow
 import logging
 from pp_link import set_debug
 import yaml
 import time
-from pp_vpn import PPVPN, TestVPN
+from pp_vpn import PPVPN
 import optparse
 
 
