@@ -73,7 +73,7 @@ class FakeAppNet(PPStation):
             logging.warning("%d no process define for %d"%(self.node_id,app_id))
 
 
-class ControlTest(unittest.TestCase):
+class TestControl(unittest.TestCase):
 
     inited = 0
     quiting = True
@@ -200,6 +200,14 @@ class ControlTest(unittest.TestCase):
         time.sleep(2)
         self.quit()
         
+    def test_getNodeId(self):
+        self.start()
+        config={"nodes":self.nodes}
+        self.stationD = self.initStation(config)
+        self.stationD.start()
+        time.sleep(2)
+        self.assertTrue(self.stationD.node_id, "test get node id")
+                
     def test_getaddr(self):
         self.init()
         self.stationA.start()

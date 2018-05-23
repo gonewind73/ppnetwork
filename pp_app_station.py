@@ -81,6 +81,7 @@ if __name__ == "__main__":
         parser.print_help()
     else:
         config = yaml.load(open(opt.config_file))
+        config["config_file"] = opt.config_file
         set_debug(config.get("DebugLevel", logging.WARNING),
                     config.get("DebugFile", ""),
 #                     debug_filter=lambda record: record.filename =="pp_flow.py" or record.filename =="pp_vpn.py" or record.levelno>logging.DEBUG,

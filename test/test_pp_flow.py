@@ -60,7 +60,7 @@ class PseudoSock(object):
             return PseudoSock((ip,port),None)
 
 
-class Test(unittest.TestCase):
+class TestFlow(unittest.TestCase):
 
     def setUp(self):
         set_debug(logging.DEBUG, "")

@@ -110,18 +110,18 @@ class Flow(PPNetApp):
                 self.sessions.pop(s_id)
                 
         if not self.send_in_minute:
-            self.beat_null()
+            start_new_thread(self.connect_out,())
                         
         if not self.quitting:
             self.send_in_minute = False
             self.timer = threading.Timer(60, self.check)
             self.timer.start()
                
-    def beat_null(self):
+    def connect_out(self):
         '''
         just keep nat firewall know it is runing
         '''
-        logging.debug("datalayer beat null")
+        logging.debug("flow connect out")
         try:
             sock = prepare_socket(timeout=1,port=self.flow_port)
             sock.connect((socket.inet_ntoa(struct.pack('I', socket.htonl(random.randint(1677721600, 1694498816)))),
@@ -129,8 +129,9 @@ class Flow(PPNetApp):
         except socket.timeout:
             pass
         except:
-            logging.exception("beat null error")
-            pass   
+            logging.exception("flow connect out error")
+        finally:
+            sock.close()   
 
     def get_self_addr(self,):
         local_addr,external_addr = self.station.get_addr(self.flow_port)

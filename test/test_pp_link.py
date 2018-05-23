@@ -10,7 +10,7 @@ import logging
 import time
 
 
-class LinkerTest(unittest.TestCase):
+class TestLinker(unittest.TestCase):
     inited = 0
 
     def start(self):

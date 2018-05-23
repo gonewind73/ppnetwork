@@ -24,7 +24,7 @@ flow:  {
     
  #vpn
  vpn: {
-       Vlan : 0,
+       VlanId : 0,
        IPRange : { start : 192.168.33.1, end : 192.168.33.255 },
        VlanIP : 0.0.0.0,
        VlanMask : 255.255.255.0,

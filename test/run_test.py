@@ -6,5 +6,5 @@ Created on 2018年5月22日
 import unittest
 
 if __name__ == "__main__":
-    suite = unittest.TestLoader().discover("test", "test*.py" )
+    suite = unittest.TestLoader().discover("test", "test_*.py" )
     unittest.TextTestRunner(verbosity=2).run(suite)

@@ -10,28 +10,6 @@ import random
 import logging
 from pp_link import NAT_TYPE
 
-
-# def set_debug(debug_level=logging.INFO, filename="", debug_filter=lambda record:True):
-#     console = logging.StreamHandler()
-#     console_filter = logging.Filter()
-#     console_filter.filter = debug_filter
-#     console.addFilter(console_filter)
-#     if filename:
-#         logging.basicConfig(level=debug_level,
-#                 format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-#                 datefmt='%Y/%m/%d %H:%M:%S',
-# #                 datefmt='%a, %d %b %Y %H:%M:%S',
-#                 filename=filename,
-#                 filemode='w',
-#                 )
-#     else:
-#         logging.basicConfig(level=debug_level,
-#                 format='%(asctime)s %(filename)s[%(lineno)d] %(levelname)s %(message)s',
-#                 datefmt='%Y/%m/%d %H:%M:%S',
-#                 handlers = [console,]
-#                 )
-
-
 class NAT(object):
 
     def __init__(self, ip, port, nat_type):
@@ -145,5 +123,6 @@ class FakeNet(object):
         logging.info("fake %d network %s %d %d"%(station.node_id,station.ip,station.port,station.nat_type))
         station._send = lambda addr,data: self.send(addr,data,nat)
         station._receive = lambda : self.receive(station.node_id,nat)
+        station.testing = True
         return station
 

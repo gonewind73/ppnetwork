@@ -719,7 +719,7 @@ class PPLinker(PPNode):
     def __init__(self, config={},msg_callback=None,ack_callback=None,):
         if config:
             self.config = config
-            super().__init__(node_id=config["node_id"],
+            super().__init__(node_id=config.get("node_id",0),
                              ip = config.get("node_ip", "0.0.0.0"),
                              port = config.get("node_port", 7071),
                              nat_type = config.get("nat_type",5),
@@ -731,6 +731,7 @@ class PPLinker(PPNode):
         self.receiver = Receiver(self,callback = msg_callback)
         self.ackor = Ackor(self,callback=ack_callback)
         self.services = {"receiver":self.receiver,"ackor":self.ackor}
+        self.testing = False
         pass
 
     def start(self):
