@@ -321,9 +321,13 @@ class PPVPN(PPNetApp):
     
     def _lan_cast(self,vpn_msg):
         for ip in self.vlan_table:
-            self.send_msg(self.vlan_table[ip].node_id, vpn_msg)
+            if not self.vlan_table[ip].node_id == self.station.node_id:
+                self.send_msg(self.vlan_table[ip].node_id, vpn_msg)
     
     def _lan_forward(self,ppmsg):
+        '''
+        forward will decrease ttl,
+        '''
         ppmsg.set("ttl",ppmsg.get("ttl")-1)
         src_id = ppmsg.get("src_id")
         for ip in self.vlan_table:
@@ -422,7 +426,8 @@ class PPVPN(PPNetApp):
                         "vlan_id":self.vlan_id,
                         "ip":ip_stoi(self.ip),
                         "salt":salt}}
-        self.send_msg(req_node_id,PPVPN.VPNMessage(dictdata=dictdata))       
+
+        self.send_msg(req_node_id,PPVPN.VPNMessage(dictdata=dictdata),always = True)       
 
         
     def wait_arp_req(self,ip):
@@ -452,7 +457,7 @@ class PPVPN(PPNetApp):
                       "session_id":session[2],
                       "ip":ip_stoi(ip)}}
         logging.debug(dictdata)
-        self.send_msg(session[0], PPVPN.VPNMessage(dictdata=dictdata))
+        self.send_msg(session[0], PPVPN.VPNMessage(dictdata=dictdata),always=True)
         return
 
 

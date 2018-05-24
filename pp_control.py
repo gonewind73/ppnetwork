@@ -179,7 +179,14 @@ class PPNetApp(PPApp):
         pass
     
     def send_msg(self, peer_id, app_msg, need_ack=False, always=False):
-        self.station.send_msg(peer_id, app_msg, need_ack, always)
+        if peer_id == self.station.node_id:
+            logging.warning("send msg to self.")
+            return 0
+        if always and not self.station.get_status(peer_id):
+            do_wait(lambda: self.station.path_requester.request_path(peer_id),
+                    lambda: self.station.get_status(peer_id),
+                    3)
+        return self.station.send_msg(peer_id, app_msg, need_ack, always)
         
     def waiting_reply(self,peer_id,app_msg):
         '''
@@ -737,6 +744,9 @@ class Beater(PPNetApp):
             pass
             
         self.beat_count += 1 
+        if self.beat_count % 12*60 == 0:
+            self.station.publish()
+            
         if not self.station.quitting:    
             self.timer = threading.Timer(60 * self.beat_interval*self.time_scale, self.beat)
             self.timer.start()
@@ -1342,6 +1352,9 @@ class PPStation(PPLinker):
             if peer_id in self.peers:
                 peer = self.peers[peer_id]
                 pp_msg.set("ttl",ttl-1)
+                self.byte_turn += len(pp_msg.get("app_data")) + 20
+                self.packet_turn += 1
+                logging.debug("%d forward to %s " % (self.node_id, str(peer_id)))
                 return self.send_ppmsg(peer, pp_msg)
             if peer_id == self.node_id:
                 return 0
@@ -1370,19 +1383,20 @@ class PPStation(PPLinker):
                 process(ppmsg, addr)     
 #             else:
 #                 logging.warning("%s no process seting for %s"%(self.node_id,ppmsg.get("app_id")))
-            else:  #if dst_id == BroadCastId:  #unknown app,just forward to peers ,try forward to dst_id
+            elif dst_id == BroadCastId:  #unknown app,just forward to peers ,try forward to dst_id
                 self.forward_ppmsg(dst_id, ppmsg)
 
         else:
-            if dst_id in self.peers:
-                logging.debug("%d forward to %s " % (self.node_id, str(dst_id)))
-                ttl = ppmsg.get("ttl") - 1 
-                if ttl & 0x0f > 0:
-                    ppmsg.set("ttl", ttl)
-                    self.send_ppmsg(self.peers[dst_id], ppmsg)
-                    self.byte_turn += len(ppmsg.get("app_data")) + 20
-                    self.packet_turn += 1
-        pass
+            self.forward_ppmsg(dst_id, ppmsg)
+#             if dst_id in self.peers:
+#                 logging.debug("%d forward to %s " % (self.node_id, str(dst_id)))
+#                 ttl = ppmsg.get("ttl") - 1 
+#                 if ttl & 0x0f > 0:
+#                     ppmsg.set("ttl", ttl)
+#                     self.send_ppmsg(self.peers[dst_id], ppmsg)
+#                     self.byte_turn += len(ppmsg.get("app_data")) + 20
+#                     self.packet_turn += 1
+#         pass
     
     def delete_peer(self,peer_id):
         if peer_id in self.peers:
