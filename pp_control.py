@@ -1239,9 +1239,9 @@ class PPStation(PPLinker):
     
     def get_addr(self,port):
         temp_config = self.config.copy()
-        temp_config.update({"node_port":port,"node_id":0})
+        temp_config.update({"node_port":port,"node_id":0,"test_mode":True,})
         temp_station=PPStation(config = temp_config)
-        temp_station.node_id = 0
+#         temp_station.node_id = 0
         temp_station.start()
         try_count = 0
         while not temp_station.node_id and try_count<10:
@@ -1335,7 +1335,7 @@ class PPStation(PPLinker):
                 return self.send_ppmsg(peer, ppmsg, need_ack)
             if peer_id == self.node_id:
                 return 0
-            print("can't communicate to %s" % peer_id)
+            logging.warning("%d can't communicate to %s" %(self.node_id, peer_id))
             return 0
 
     def forward_ppmsg(self, peer_id, pp_msg ):
@@ -1361,7 +1361,7 @@ class PPStation(PPLinker):
                 return self.send_ppmsg(peer, pp_msg)
             if peer_id == self.node_id:
                 return 0
-            print("can't communicate to %s" % peer_id)
+            logging.warning("%d can't communicate to %s" %(self.node_id, peer_id))
             return 0        
     
     def process_msg(self, ppmsg, addr):
@@ -1442,11 +1442,15 @@ class PPStation(PPLinker):
 #             yaml.dump({"node_id":self.node_id},cf)
 #         return
     def save_node_id(self):
+        if "test_mode" in self.config:
+            return
         cf = open("node.id","w")
         yaml.dump({"node_id":self.node_id},cf)
         return    
     
     def load_node_id(self):
+        if "test_mode" in self.config:
+            return  0      
         try:
             config =  yaml.load(open("node.id"))
             if "node_id" in config:
@@ -1470,6 +1474,8 @@ class PPStation(PPLinker):
     
     def load_nodes(self,config):
         self.peers = {}        
+        self._load_nodes_from_file("nodes.pkl")
+        
         if "node_file" in config:
             self.db_file = config["node_file"]
             self._load_nodes_from_file(self.db_file)
