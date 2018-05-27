@@ -1,7 +1,5 @@
 {
 #ppnet 
-#net_id: 0,                   
-
 node_id: 818300194,
 node_port: 54194,
 
@@ -30,4 +28,4 @@ flow:  {
        VlanMask : 255.255.255.0,
        VlanSecret : "12345678",
  }   
-}
+} 

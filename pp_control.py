@@ -1188,6 +1188,8 @@ class PPStation(PPLinker):
         if config:
             super().__init__(config = config,msg_callback=self.process_msg)
 #             self.db_file = self.config.get("db_file","nodes.pkl")
+            if not self.node_id:
+                self.node_id = self.load_node_id()
             self.net_id = config.get("net_id", 0xffffffff)
         else:
             raise("Not correct config!")
@@ -1239,6 +1241,7 @@ class PPStation(PPLinker):
         temp_config = self.config.copy()
         temp_config.update({"node_port":port,"node_id":0})
         temp_station=PPStation(config = temp_config)
+        temp_station.node_id = 0
         temp_station.start()
         try_count = 0
         while not temp_station.node_id and try_count<10:
@@ -1433,11 +1436,23 @@ class PPStation(PPLinker):
             f.write(json.dumps(self._dump_nodes_to_dict()))
         pass
     
+#     def save_node_id(self):
+#         if "config_file"  in self.config:
+#             cf = open(self.config["config_file"],"a")
+#             yaml.dump({"node_id":self.node_id},cf)
+#         return
     def save_node_id(self):
-        if "config_file"  in self.config:
-            cf = open(self.config["config_file"],"w")
-            yaml.dump({"node_id":self.node_id},cf)
-        return
+        cf = open("node.id","w")
+        yaml.dump({"node_id":self.node_id},cf)
+        return    
+    
+    def load_node_id(self):
+        try:
+            config =  yaml.load(open("node.id"))
+            if "node_id" in config:
+                return config["node_id"]
+        except:
+            return 0
     
     def json_nodes(self, detail=False):
         nodes_dict = {}
