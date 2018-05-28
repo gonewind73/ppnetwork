@@ -1506,7 +1506,7 @@ class PPStation(PPLinker):
                     nodes1[int(node)] = nodes[node]
                 self._load_nodes_from_dict(nodes1)
         except IOError:
-            logging.warning("can't load nodes from %s" % self.db_file)
+            logging.warning("can't load nodes from %s" % filename)
     
     def wait_status(self,node_id,timeout=5):
         count = 0
