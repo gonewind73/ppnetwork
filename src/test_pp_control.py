@@ -7,71 +7,8 @@ from pp_control import PPStation, Beater
 from pp_link import BroadCastId, PPMessage, NAT_TYPE, set_debug
 import logging
 import unittest
-from test.pseudo_net import FakeNet
+from pseudo_net import FakeNet
 import time
-
-class FakeAppNet(PPStation):
-    '''
-    2way to simulate network
-    
-    1st way to simulate is for app tester
-        station1 = FakeAppNet(node_id1)
-        station2 = FakeAppNet(node_id2)
-        ...
-        processes ={node_id1:process1,node_id2:process2,...}
-        station1.set_process(processes)
-        station2.set_process(processes)   
-        ...
-             
-        app runcode
-    
-    2nd way to simulate,is more lower layer，please use FakeNet:
-    
-        self.fake_net = FakeNet()
-        
-        self.stationA = self.fake_net.fake(PPLinker(config={"node_id":100, "node_ip":"118.153.152.193", "node_port":54330, "nat_type":NAT_TYPE["Turnable"]}))
-        self.stationA.start()
-    '''
-    def __init__(self, config):
-        super().__init__(config)
-#         self.node_id = node_id
-#         self.process_list = {}
-        self.process = {}
-        self.status = True  # simulate net broken
-#         self.quitting = False
-        pass
-    
-#     def set_app_process(self, appid, app_process):
-#         self.process_list[appid] = app_process
-#         pass
-    
-    def set_process(self, process):
-        '''
-        processes ={node_id1:process1,node_id2:process2,...}
-        '''
-        self.process = process
-        
-    def send_msg(self, peer_id, app_msg, need_ack=False, always=False):
-        if peer_id == BroadCastId:
-            for peer in self.process:
-#                 logging.debug(peer)
-                self.send_msg(peer, app_msg, need_ack, always)
-            return
-        app_data = app_msg.dump()
-        ppmsg = PPMessage(dictdata={"src_id":self.node_id, "dst_id":peer_id,
-                                            "app_data":app_data, "app_len":len(app_data),
-                                            "app_id":app_msg.get("app_id")})
-        if self.status and not self.node_id == peer_id:
-            self.process[peer_id](ppmsg, ("0.0.0.0", 54320))
-        pass       
-    
-    def process_msg(self, ppmsg, addr):
-        app_id = ppmsg.get("app_id")
-        if app_id in self.process_list:
-            self.process_list[app_id](ppmsg,addr)
-        else:
-            logging.warning("%d no process define for %d"%(self.node_id,app_id))
-
 
 class TestControl(unittest.TestCase):
 

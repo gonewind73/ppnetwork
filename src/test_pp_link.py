@@ -5,9 +5,10 @@ Created on 2018年5月22日
 '''
 import unittest
 from pp_link import PPLinker, NAT_TYPE, PPMessage, set_debug
-from test.pseudo_net import FakeNet
+
 import logging
 import time
+from pseudo_net import FakeNet
 
 
 class TestLinker(unittest.TestCase):

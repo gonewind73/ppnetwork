@@ -6,10 +6,12 @@ Created on 2018年5月22日
 import unittest
 from pp_link import set_debug, NAT_TYPE
 import logging
-from test.test_pp_control import FakeAppNet
+
 from pp_control import Session
 import time
 from pp_flow import Flow
+from pseudo_net import FakeAppNet
+
 
 pseudo_sockets= {}    
 class PseudoSock(object):

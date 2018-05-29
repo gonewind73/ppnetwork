@@ -3,8 +3,9 @@
 
 from setuptools import setup
 
+
 setup(name='python-ppnetwork',
-    py_modules = ["pp_link","pp_flow","pp_control"],
+    py_modules = ["pp_link","pp_flow","pp_control","pseudo_net"],
     author='gonewind.he',
       author_email='gonewind.he@gmail.com',
       maintainer='gonewind',
