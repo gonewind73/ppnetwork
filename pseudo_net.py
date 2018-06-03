@@ -8,7 +8,7 @@ import threading
 import time
 import random
 import logging
-from pp_link import NAT_TYPE
+from pp_link import NAT_TYPE, BroadCastId, PPMessage
 from pp_control import PPStation
 
 class NAT(object):

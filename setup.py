@@ -14,7 +14,7 @@ setup(name='python-ppnetwork',
       description='Linux/Windows  ppnetwork driver  written in  python',
       long_description=open('README.rst',encoding="utf-8").read(),
 #       long_description_content_type="text/markdown",
-      version='1.0.6',
+      version='1.0.7',
       python_requires='>=3',
       platforms=["Linux","Windows"],
       classifiers=[

@@ -785,11 +785,11 @@ class Beater(PPNetApp):
             
         
         if beat_cmd == "offline":
-            self.send_msg(BroadCastId, beat_msg, always=False)
+            self.station.send_msg(BroadCastId, beat_msg, always=False)
         else:
             if now - peer.last_out > 10 or beat_cmd == "beat_res" or is_try:
 #                 logging.debug("beat_msg %s"%beat_msg.dict_data)
-                self.send_msg(peer.node_id, beat_msg, always=True)
+                self.station.send_msg(peer.node_id, beat_msg, always=True)
                 peer.last_out = int(now)
             if not peer.status and not is_try:
                 self.station.path_requester.request_path(peer.node_id)
