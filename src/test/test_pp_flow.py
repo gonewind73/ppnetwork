@@ -9,8 +9,8 @@ import logging
 
 from pp_control import Session
 import time
-from pp_flow import Flow
-from pseudo_net import FakeAppNet
+from ppnet.pp_flow import Flow
+from test.pseudo_net import FakeAppNet
 
 
 pseudo_sockets= {}    

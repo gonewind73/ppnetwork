@@ -3,6 +3,13 @@ PPNetwork
 ========
 
 PPNetwork 是无中心节点的网络驱动，包括 pp_link，pp_control，pp_flow 三部分
+每个节点都具备控制和连接功能。无集中控制器
+
+PPNode
+PPLink
+PPBase
+
+
 
 
 pp_link
@@ -29,5 +36,16 @@ pp_flow
 =====
 
 ppnetwork 不能独立运行，需要根据接口，开发上层应用。
+
+from ppnet import PPDataNode
+
+ppdatanode = PPDataNode(port=54320)
+ppdatanode.set_peer(addr)
+ppdatanode.send(data,addr1)
+data,addr2 = ppdatanode.receive(count)
+
+
+
+
 
 
